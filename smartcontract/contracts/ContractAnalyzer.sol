@@ -33,8 +33,15 @@ contract ContractAnalyzer is Ownable {
     }
 
     // Events
-    event ContractAnalyzed(address indexed contractAddress, ContractAnalysis analysis);
-    event GasEstimated(address indexed contractAddress, bytes4 functionSelector, GasEstimate estimate);
+    event ContractAnalyzed(
+        address indexed contractAddress,
+        ContractAnalysis analysis
+    );
+    event GasEstimated(
+        address indexed contractAddress,
+        bytes4 functionSelector,
+        GasEstimate estimate
+    );
 
     constructor() Ownable(msg.sender) {}
 
@@ -43,7 +50,9 @@ contract ContractAnalyzer is Ownable {
      * @param contractAddress Address of the contract to analyze
      * @return analysis Contract analysis results
      */
-    function analyzeContract(address contractAddress) external returns (ContractAnalysis memory analysis) {
+    function analyzeContract(
+        address contractAddress
+    ) external returns (ContractAnalysis memory analysis) {
         require(contractAddress != address(0), "Invalid contract address");
 
         // Initialize all fields to default values
@@ -104,7 +113,7 @@ contract ContractAnalyzer is Ownable {
         estimate.success = false;
         estimate.errorMessage = "";
 
-        try this.estimateGasCall{ gas: 10000000 }(contractAddress, data) {
+        try this.estimateGasCall{gas: 10000000}(contractAddress, data) {
             // If successful, estimate was successful
             estimate.success = true;
             estimate.estimatedGas = 10000000; // Base estimate
@@ -133,7 +142,10 @@ contract ContractAnalyzer is Ownable {
      * @param contractAddress Address of the contract
      * @param data Calldata for the function call
      */
-    function estimateGasCall(address contractAddress, bytes calldata data) external view {
+    function estimateGasCall(
+        address contractAddress,
+        bytes calldata data
+    ) external view {
         // This function is used internally for gas estimation
         // It will revert if the call would fail, allowing us to catch errors
         (bool success, ) = contractAddress.staticcall(data);
@@ -149,7 +161,11 @@ contract ContractAnalyzer is Ownable {
      */
     function getBasicInfo(
         address contractAddress
-    ) external view returns (uint256 codeSize, uint256 balance, bool isContract) {
+    )
+        external
+        view
+        returns (uint256 codeSize, uint256 balance, bool isContract)
+    {
         codeSize = contractAddress.code.length;
         balance = contractAddress.balance;
         isContract = contractAddress.code.length > 0;
@@ -176,17 +192,19 @@ contract ContractAnalyzer is Ownable {
     /**
      * @dev Check if contract has specific function
      * @param contractAddress Address of the contract
-     * @param functionSelector Function selector to check
-     * @return hasFunction Whether the contract has the specified function
+     * @return result Whether the contract has the specified function
      */
-    function hasFunction(address contractAddress, bytes4 functionSelector) external view returns (bool hasFunction) {
+    function hasFunction(
+        address contractAddress,
+        bytes4 /* functionSelector */
+    ) external view returns (bool result) {
         if (contractAddress.code.length == 0) {
             return false;
         }
 
         // Basic check - if contract has code, assume it might have the function
         // This is a simplified check and not 100% accurate
-        hasFunction = contractAddress.code.length > 0;
-        return hasFunction;
+        result = contractAddress.code.length > 0;
+        return result;
     }
 }
