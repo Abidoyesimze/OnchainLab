@@ -60,5 +60,10 @@ export default defineConfig({
       },
     ],
   },
+  sourcify: {
+    enabled: true,
+    apiUrl: "https://sourcify.dev/server",
+    browserUrl: "https://sourcify.dev",
+  },
 });
 
