@@ -1,6 +1,6 @@
 /**
- * This file contains the deployed contract addresses and ABIs for DefiForge on Somnia Testnet.
- * These contracts were deployed to Chain ID: 50312
+ * This file contains the deployed contract addresses and ABIs for OnchainLab on Mantle Sepolia Testnet.
+ * These contracts were deployed to Chain ID: 5003
  */
 import {
   ContractAnalyzerABI,
@@ -13,12 +13,13 @@ import {
 
 // Contract addresses for easy access
 export const CONTRACT_ADDRESSES = {
-  ERC20Factory: "0x4F6D41C9F94FdD64c8D82C4eb71a459075E5Ae57",
-  DeFiUtils: "0x8860C6081E3Dd957d225FEf12d718495EBa75255",
-  ContractAnalyzer: "0xB0170720d8BB751Ed8F7cC071b8D0d9b4e5f501F",
-  ContractTemplates: "0x157f375f0112837CA14c8dAFB9dFe26f83a94634",
-  MerkleProofValidator: "0x6FA75F5dc94A1Cec18a8a113851231c66e2Bb90f",
-  MerkleProof: "0x0f1d9F35bc1631D8C3eB6A2B35A2972bF5061E53",
+  ContractAnalyzer: "0xeAf73aee69441cA68166bc0E1BE63E70F2ce2c06",
+  // TODO: Update addresses when other contracts are deployed
+  ERC20Factory: "0x0000000000000000000000000000000000000000",
+  DeFiUtils: "0x0000000000000000000000000000000000000000",
+  ContractTemplates: "0x0000000000000000000000000000000000000000",
+  MerkleProofValidator: "0x0000000000000000000000000000000000000000",
+  MerkleProof: "0x0000000000000000000000000000000000000000",
 } as const;
 
 // Contract ABIs for easy access
@@ -33,20 +34,25 @@ export const CONTRACT_ABIS = {
 
 // Network information
 export const NETWORK_INFO = {
-  name: "Somnia Testnet",
-  chainId: 50312,
-  rpcUrl: "https://dream-rpc.somnia.network/",
-  blockExplorer: "https://shannon-explorer.somnia.network/",
+  name: "Mantle Sepolia Testnet",
+  chainId: 5003,
+  rpcUrl: "https://rpc.sepolia.mantle.xyz",
+  blockExplorer: "https://explorer.sepolia.mantle.xyz",
   nativeCurrency: {
-    name: "Somnia Test Token",
-    symbol: "STT",
+    name: "Mantle Sepolia ETH",
+    symbol: "ETH",
     decimals: 18,
   },
 } as const;
 
 // Default export for backward compatibility
 const deployedContracts = {
-  50312: {
+  5003: {
+    ContractAnalyzer: {
+      address: CONTRACT_ADDRESSES.ContractAnalyzer,
+      abi: CONTRACT_ABIS.ContractAnalyzer,
+    },
+    // TODO: Add other contracts when deployed
     ERC20Factory: {
       address: CONTRACT_ADDRESSES.ERC20Factory,
       abi: CONTRACT_ABIS.ERC20Factory,
@@ -54,10 +60,6 @@ const deployedContracts = {
     DeFiUtils: {
       address: CONTRACT_ADDRESSES.DeFiUtils,
       abi: CONTRACT_ABIS.DeFiUtils,
-    },
-    ContractAnalyzer: {
-      address: CONTRACT_ADDRESSES.ContractAnalyzer,
-      abi: CONTRACT_ABIS.ContractAnalyzer,
     },
     ContractTemplates: {
       address: CONTRACT_ADDRESSES.ContractTemplates,
