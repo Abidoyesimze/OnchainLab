@@ -1,0 +1,213 @@
+[
+  {
+    "inputs": [{ "internalType": "address", "name": "_treasury", "type": "address" }],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "address", "name": "user", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "FeeCollected",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "bytes32", "name": "root", "type": "bytes32" },
+      { "indexed": false, "internalType": "string", "name": "description", "type": "string" },
+      { "indexed": false, "internalType": "uint256", "name": "listSize", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "creator", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "feePaid", "type": "uint256" }
+    ],
+    "name": "MerkleTreeAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "bytes32", "name": "root", "type": "bytes32" },
+      { "indexed": false, "internalType": "address", "name": "remover", "type": "address" }
+    ],
+    "name": "MerkleTreeRemoved",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "bytes32", "name": "root", "type": "bytes32" },
+      { "indexed": false, "internalType": "string", "name": "newDescription", "type": "string" },
+      { "indexed": false, "internalType": "address", "name": "updater", "type": "address" }
+    ],
+    "name": "MerkleTreeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "indexed": false, "internalType": "uint256", "name": "newFee", "type": "uint256" }],
+    "name": "PlatformFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "indexed": false, "internalType": "address", "name": "newTreasury", "type": "address" }],
+    "name": "TreasuryUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "indexed": false, "internalType": "address", "name": "newVerifier", "type": "address" }],
+    "name": "TrustedVerifierUpdated",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "_root", "type": "bytes32" },
+      { "internalType": "string", "name": "_description", "type": "string" },
+      { "internalType": "uint256", "name": "_listSize", "type": "uint256" }
+    ],
+    "name": "addMerkleTree",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bytes32", "name": "_root", "type": "bytes32" }],
+    "name": "getMerkleTreeInfo",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "string", "name": "description", "type": "string" },
+          { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+          { "internalType": "uint256", "name": "listSize", "type": "uint256" },
+          { "internalType": "address", "name": "creator", "type": "address" },
+          { "internalType": "bool", "name": "isActive", "type": "bool" }
+        ],
+        "internalType": "struct MerkleProofX.MerkleTreeInfo",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getPlatformFee",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "isKosVerified",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bytes32", "name": "_root", "type": "bytes32" }],
+    "name": "isMerkleRootValid",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "isNewcomer",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_user", "type": "address" }],
+    "name": "isUserNewcomer",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
+    "name": "merkleTrees",
+    "outputs": [
+      { "internalType": "string", "name": "description", "type": "string" },
+      { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+      { "internalType": "uint256", "name": "listSize", "type": "uint256" },
+      { "internalType": "address", "name": "creator", "type": "address" },
+      { "internalType": "bool", "name": "isActive", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "platformFee",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "platformTreasury",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bytes32", "name": "_root", "type": "bytes32" }],
+    "name": "removeMerkleTree",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_verifier", "type": "address" }],
+    "name": "setTrustedVerifier",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_claimer", "type": "address" },
+      { "internalType": "bytes", "name": "_signature", "type": "bytes" }
+    ],
+    "name": "submitVerifiedProof",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "trustedVerifier",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "_root", "type": "bytes32" },
+      { "internalType": "string", "name": "_newDescription", "type": "string" }
+    ],
+    "name": "updateMerkleTreeDescription",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_newFee", "type": "uint256" }],
+    "name": "updatePlatformFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_newTreasury", "type": "address" }],
+    "name": "updateTreasury",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
