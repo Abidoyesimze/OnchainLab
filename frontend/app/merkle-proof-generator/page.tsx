@@ -12,6 +12,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { formatEther } from "viem";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { NETWORK_INFO } from "../../contracts/deployedContracts";
 import {
   CheckCircleIcon,
   ClipboardDocumentIcon,
@@ -606,7 +607,7 @@ const MerkleGenerator = () => {
             your Merkle root and proofs.
           </p>
           <p className="text-xs text-gray-400 mb-4">
-            Supported testnets: ETN (Chain ID: 5201420) and Somnia (Chain ID: 50312)
+            Network: {NETWORK_INFO.name} (Chain ID: {NETWORK_INFO.chainId})
           </p>
 
           <div className="bg-purple-900/20 p-4 rounded-lg border border-purple-800">
@@ -913,12 +914,12 @@ const MerkleGenerator = () => {
                           {txHash && (
                             <p className="mt-1">
                               <a
-                                href={`https://testnet-blockexplorer.electroneum.com/tx/${txHash}`}
+                                href={`${NETWORK_INFO.blockExplorer}/tx/${txHash}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-purple-400 hover:text-purple-300 underline text-sm"
                               >
-                                View on ETN Explorer
+                                View on Explorer
                               </a>
                             </p>
                           )}
