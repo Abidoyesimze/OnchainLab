@@ -10,7 +10,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   DocumentDuplicateIcon,
-  ExternalLinkIcon,
+  ArrowTopRightOnSquareIcon,
   ShieldCheckIcon,
   CodeBracketIcon,
   CurrencyDollarIcon,

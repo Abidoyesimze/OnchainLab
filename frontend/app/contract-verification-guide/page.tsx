@@ -9,7 +9,7 @@ import {
   ShieldCheckIcon,
   GlobeAltIcon,
   ClipboardDocumentIcon,
-  ExternalLinkIcon
+  ArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/outline';
 
 const ContractVerificationGuide = () => {
@@ -206,7 +206,7 @@ const ContractVerificationGuide = () => {
                   >
                     <GlobeAltIcon className="h-5 w-5" />
                     <span>ETN Explorer</span>
-                    <ExternalLinkIcon className="h-4 w-4 ml-auto" />
+                    <ArrowTopRightOnSquareIcon className="h-4 w-4 ml-auto" />
                   </a>
                   <a
                     href="https://shannon-explorer.somnia.network"
@@ -216,7 +216,7 @@ const ContractVerificationGuide = () => {
                   >
                     <GlobeAltIcon className="h-5 w-5" />
                     <span>Somnia Explorer</span>
-                    <ExternalLinkIcon className="h-4 w-4 ml-auto" />
+                    <ArrowTopRightOnSquareIcon className="h-4 w-4 ml-auto" />
                   </a>
                 </div>
               </div>
