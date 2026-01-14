@@ -7,6 +7,8 @@ import {
   ContractTemplatesABI,
   DeFiUtilsABI,
   ERC20FactoryABI,
+  ERC721FactoryABI,
+  ERC1155FactoryABI,
   MerkleProofABI,
   MerkleProofValidatorABI,
 } from "../ABI";
@@ -14,17 +16,20 @@ import {
 // Contract addresses for easy access
 export const CONTRACT_ADDRESSES = {
   ContractAnalyzer: "0xeAf73aee69441cA68166bc0E1BE63E70F2ce2c06",
-  // TODO: Update addresses when other contracts are deployed
-  ERC20Factory: "0x0000000000000000000000000000000000000000",
-  DeFiUtils: "0x0000000000000000000000000000000000000000",
-  ContractTemplates: "0x0000000000000000000000000000000000000000",
-  MerkleProofValidator: "0x0000000000000000000000000000000000000000",
-  MerkleProof: "0x0000000000000000000000000000000000000000",
+  ContractTemplates: "0x836E78d3059a17E9D11C509c0b82782490B9d84D",
+  DeFiUtils: "0x208Cc34f586b70c35d0Db69E3A1FCdF8B8Eb35cc",
+  ERC20Factory: "0x813a30B635e0925bA02fce2234B72F18c0B8F46F",
+  ERC721Factory: "0x05e4f6A15Ef1016691332c94037694031FC26F35",
+  ERC1155Factory: "0x74560D1B931c5A60A4Da31F24d2aB92aa9365190",
+  MerkleProofValidator: "0xE13e882Fd85071541700355C07A520926f3c11fa",
+  MerkleProof: "0xC51083720359DBaDe92d52f809a17Ef3e7180e2b",
 } as const;
 
 // Contract ABIs for easy access
 export const CONTRACT_ABIS = {
   ERC20Factory: ERC20FactoryABI,
+  ERC721Factory: ERC721FactoryABI,
+  ERC1155Factory: ERC1155FactoryABI,
   DeFiUtils: DeFiUtilsABI,
   ContractAnalyzer: ContractAnalyzerABI,
   ContractTemplates: ContractTemplatesABI,
@@ -52,18 +57,25 @@ const deployedContracts = {
       address: CONTRACT_ADDRESSES.ContractAnalyzer,
       abi: CONTRACT_ABIS.ContractAnalyzer,
     },
-    // TODO: Add other contracts when deployed
-    ERC20Factory: {
-      address: CONTRACT_ADDRESSES.ERC20Factory,
-      abi: CONTRACT_ABIS.ERC20Factory,
+    ContractTemplates: {
+      address: CONTRACT_ADDRESSES.ContractTemplates,
+      abi: CONTRACT_ABIS.ContractTemplates,
     },
     DeFiUtils: {
       address: CONTRACT_ADDRESSES.DeFiUtils,
       abi: CONTRACT_ABIS.DeFiUtils,
     },
-    ContractTemplates: {
-      address: CONTRACT_ADDRESSES.ContractTemplates,
-      abi: CONTRACT_ABIS.ContractTemplates,
+    ERC20Factory: {
+      address: CONTRACT_ADDRESSES.ERC20Factory,
+      abi: CONTRACT_ABIS.ERC20Factory,
+    },
+    ERC721Factory: {
+      address: CONTRACT_ADDRESSES.ERC721Factory,
+      abi: CONTRACT_ABIS.ERC721Factory,
+    },
+    ERC1155Factory: {
+      address: CONTRACT_ADDRESSES.ERC1155Factory,
+      abi: CONTRACT_ABIS.ERC1155Factory,
     },
     MerkleProofValidator: {
       address: CONTRACT_ADDRESSES.MerkleProofValidator,
