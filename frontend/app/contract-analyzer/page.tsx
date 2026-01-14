@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { ContractAnalyzerContract, DeFiUtilsContract, ERC20FactoryContract, getContractAddress } from "../../ABI";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
-import { useAccount, useReadContract } from "wagmi";
+import { useAccount } from "wagmi";
 
 // Define types for better type safety
 interface AnalysisResult {
@@ -416,7 +416,7 @@ const ContractAnalyzerPage = () => {
       <div className="max-w-6xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-slate-400 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold mb-4 text-white">
             Contract Analyzer
           </h1>
           <p className="text-xl text-gray-300">
