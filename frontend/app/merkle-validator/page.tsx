@@ -348,8 +348,7 @@ const MerkleValidatorPage = () => {
                 </div>
               </div>
             )}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
