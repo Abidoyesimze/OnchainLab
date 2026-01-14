@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MerkleProofContract } from "../ABI";
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { ethers } from "ethers";
+import { useAccount } from "wagmi";
 
 // Define TypeScript interfaces for clarity
 interface TreeInfo {
@@ -13,81 +14,176 @@ interface TreeInfo {
 
 // Hook to check if a Merkle root is registered and valid
 export function useMerkleRootValid(root: string | undefined) {
-  const enabled = !!root && root !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const [isValid, setIsValid] = useState<boolean | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
-  const { data, error, isPending } = useReadContract({
-    address: MerkleProofContract.address,
-    abi: MerkleProofContract.abi,
-    functionName: "isMerkleRootValid",
-    args: [root || "0x0000000000000000000000000000000000000000000000000000000000000000"],
-  });
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!root || root === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+        setIsValid(undefined);
+        return;
+      }
+
+      if (!window.ethereum) {
+        setIsError(true);
+        return;
+      }
+
+      setIsLoading(true);
+      setIsError(false);
+
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(MerkleProofContract.address, MerkleProofContract.abi, provider);
+        const result = await contract.isMerkleRootValid(root);
+        setIsValid(result);
+      } catch (error) {
+        console.error("Error checking Merkle root:", error);
+        setIsError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [root]);
 
   return {
-    isValid: data as boolean | undefined,
-    isLoading: isPending,
-    isError: !!error,
+    isValid,
+    isLoading,
+    isError,
   };
 }
 
 // Hook to get platform fee
 export function usePlatformFee() {
-  const { data, error, isPending } = useReadContract({
-    address: MerkleProofContract.address,
-    abi: MerkleProofContract.abi,
-    functionName: "getPlatformFee",
-  });
+  const [fee, setFee] = useState<bigint | string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!window.ethereum) {
+        setIsError(true);
+        return;
+      }
+
+      setIsLoading(true);
+      setIsError(false);
+
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(MerkleProofContract.address, MerkleProofContract.abi, provider);
+        const result = await contract.getPlatformFee();
+        setFee(result);
+      } catch (error) {
+        console.error("Error fetching platform fee:", error);
+        setIsError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   return {
-    fee: data as bigint | string | undefined,
-    isLoading: isPending,
-    isError: !!error,
+    fee,
+    isLoading,
+    isError,
   };
 }
 
 // Hook to check if user is a newcomer (first tree is free)
 export function useIsNewcomer() {
   const { address } = useAccount();
+  const [isNewcomer, setIsNewcomer] = useState<boolean | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
-  const { data, error, isPending } = useReadContract({
-    address: MerkleProofContract.address,
-    abi: MerkleProofContract.abi,
-    functionName: "isUserNewcomer",
-    args: [address || "0x0000000000000000000000000000000000000000"],
-  });
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!address || !window.ethereum) {
+        setIsNewcomer(undefined);
+        return;
+      }
+
+      setIsLoading(true);
+      setIsError(false);
+
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(MerkleProofContract.address, MerkleProofContract.abi, provider);
+        const result = await contract.isUserNewcomer(address);
+        setIsNewcomer(result);
+      } catch (error) {
+        console.error("Error checking newcomer status:", error);
+        setIsError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [address]);
 
   return {
-    isNewcomer: data as boolean | undefined,
-    isLoading: isPending,
-    isError: !!error,
+    isNewcomer,
+    isLoading,
+    isError,
   };
 }
 
 // Hook to get Merkle tree information
 export function useMerkleTreeInfo(root: string | undefined) {
-  const enabled = !!root && root !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const [treeInfo, setTreeInfo] = useState<TreeInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
-  const { data, error, isPending } = useReadContract({
-    address: MerkleProofContract.address,
-    abi: MerkleProofContract.abi,
-    functionName: "getMerkleTreeInfo",
-    args: [root || "0x0000000000000000000000000000000000000000000000000000000000000000"],
-  });
-
-  // Transform the data into a more usable format
-  const treeInfo = data
-    ? {
-        description: (data as any)[0] as string,
-        timestamp: Number((data as any)[1]),
-        listSize: Number((data as any)[2]),
-        creator: (data as any)[3] as string,
-        isActive: (data as any)[4] as boolean,
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!root || root === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+        setTreeInfo(null);
+        return;
       }
-    : null;
+
+      if (!window.ethereum) {
+        setIsError(true);
+        return;
+      }
+
+      setIsLoading(true);
+      setIsError(false);
+
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(MerkleProofContract.address, MerkleProofContract.abi, provider);
+        const result = await contract.getMerkleTreeInfo(root);
+
+        setTreeInfo({
+          description: result[0] as string,
+          timestamp: Number(result[1]),
+          listSize: Number(result[2]),
+          creator: result[3] as string,
+          isActive: result[4] as boolean,
+        });
+      } catch (error) {
+        console.error("Error fetching Merkle tree info:", error);
+        setIsError(true);
+        setTreeInfo(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [root]);
 
   return {
-    treeInfo: treeInfo as TreeInfo | null,
-    isLoading: isPending,
-    isError: !!error,
+    treeInfo,
+    isLoading,
+    isError,
   };
 }
 
@@ -95,14 +191,6 @@ export function useMerkleTreeInfo(root: string | undefined) {
 export function useMerkleContract() {
   const { address } = useAccount();
   const [isLoading, setIsLoading] = useState(false);
-
-  // Contract write operations
-  const { writeContractAsync, isPending: isWritePending } = useWriteContract();
-
-  // Set loading state based on write operation
-  useEffect(() => {
-    setIsLoading(isWritePending);
-  }, [isWritePending]);
 
   // Add a Merkle tree
   const addMerkleTree = async (
@@ -112,18 +200,18 @@ export function useMerkleContract() {
     feeValue: bigint = 0n,
   ): Promise<`0x${string}`> => {
     if (!address) throw new Error("Wallet not connected");
+    if (!window.ethereum) throw new Error("MetaMask or wallet provider not found");
 
     setIsLoading(true);
     try {
-      const hash = await writeContractAsync({
-        address: MerkleProofContract.address,
-        abi: MerkleProofContract.abi,
-        functionName: "addMerkleTree",
-        args: [root, description, BigInt(listSize)],
-        value: feeValue,
-      });
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(MerkleProofContract.address, MerkleProofContract.abi, signer);
 
-      return hash;
+      const tx = await contract.addMerkleTree(root, description, BigInt(listSize), { value: feeValue });
+      await tx.wait();
+
+      return tx.hash as `0x${string}`;
     } catch (error) {
       console.error("Error adding Merkle tree:", error);
       throw error;
@@ -135,17 +223,18 @@ export function useMerkleContract() {
   // Remove a Merkle tree
   const removeMerkleTree = async (root: string): Promise<`0x${string}`> => {
     if (!address) throw new Error("Wallet not connected");
+    if (!window.ethereum) throw new Error("MetaMask or wallet provider not found");
 
     setIsLoading(true);
     try {
-      const hash = await writeContractAsync({
-        address: MerkleProofContract.address,
-        abi: MerkleProofContract.abi,
-        functionName: "removeMerkleTree",
-        args: [root],
-      });
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(MerkleProofContract.address, MerkleProofContract.abi, signer);
 
-      return hash;
+      const tx = await contract.removeMerkleTree(root);
+      await tx.wait();
+
+      return tx.hash as `0x${string}`;
     } catch (error) {
       console.error("Error removing Merkle tree:", error);
       throw error;
@@ -157,17 +246,18 @@ export function useMerkleContract() {
   // Update Merkle tree description
   const updateTreeDescription = async (root: string, newDescription: string): Promise<`0x${string}`> => {
     if (!address) throw new Error("Wallet not connected");
+    if (!window.ethereum) throw new Error("MetaMask or wallet provider not found");
 
     setIsLoading(true);
     try {
-      const hash = await writeContractAsync({
-        address: MerkleProofContract.address,
-        abi: MerkleProofContract.abi,
-        functionName: "updateMerkleTreeDescription",
-        args: [root, newDescription],
-      });
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(MerkleProofContract.address, MerkleProofContract.abi, signer);
 
-      return hash;
+      const tx = await contract.updateMerkleTreeDescription(root, newDescription);
+      await tx.wait();
+
+      return tx.hash as `0x${string}`;
     } catch (error) {
       console.error("Error updating Merkle tree description:", error);
       throw error;

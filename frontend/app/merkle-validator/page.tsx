@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { MerkleProofValidatorContract, getContractAddress } from "../../ABI";
+import { ethers } from "ethers";
 import { toast } from "react-toastify";
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import React from "react"; // Added missing import
+import { useAccount } from "wagmi";
 
 const MerkleValidatorPage = () => {
   const { address, isConnected } = useAccount();
@@ -13,21 +13,10 @@ const MerkleValidatorPage = () => {
   const [leaf, setLeaf] = useState("");
   const [description, setDescription] = useState("");
   const [validationResult, setValidationResult] = useState<any>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
-  const { writeContract: registerMerkleRoot, data: registerData } = useWriteContract();
-
-  const { writeContract: validateProof, data: validateData } = useWriteContract();
-
-  const { isLoading: isRegistering, isSuccess: isRegistered } = useWaitForTransactionReceipt({
-    hash: registerData,
-  });
-
-  const { isLoading: isValidatingTx, isSuccess: isValidationComplete } = useWaitForTransactionReceipt({
-    hash: validateData,
-  });
-
-  const handleRegisterMerkleRoot = () => {
+  const handleRegisterMerkleRoot = async () => {
     if (!merkleRoot || !description) {
       toast.error("Please fill in all fields");
       return;
@@ -44,23 +33,52 @@ const MerkleValidatorPage = () => {
       return;
     }
 
+    if (!window.ethereum) {
+      toast.error("MetaMask or wallet provider not found");
+      return;
+    }
+
+    setIsRegistering(true);
+
     try {
-      setIsValidating(true);
-      registerMerkleRoot({
-        address: getContractAddress("MerkleProofValidator"),
-        abi: MerkleProofValidatorContract.abi,
-        functionName: "registerMerkleRoot",
-        args: [merkleRoot, description],
-      });
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        getContractAddress("MerkleProofValidator"),
+        MerkleProofValidatorContract.abi,
+        signer,
+      );
+
       toast.info("Registering Merkle root...");
-    } catch (error) {
+
+      const tx = await contract.registerMerkleRoot(merkleRoot, description);
+      toast.info(`Transaction sent: ${tx.hash.slice(0, 10)}...`);
+
+      const receipt = await tx.wait();
+      toast.success("Merkle root registered successfully!");
+
+      // Reset form
+      setMerkleRoot("");
+      setDescription("");
+    } catch (error: unknown) {
+      let errorMessage = "Failed to register Merkle root";
+      if (error instanceof Error) {
+        if (error.message.includes("user rejected")) {
+          errorMessage = "Transaction rejected by user";
+        } else if (error.message.includes("execution reverted")) {
+          errorMessage = "Transaction failed. The Merkle root may already be registered.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      toast.error(errorMessage);
       console.error("Error registering Merkle root:", error);
-      toast.error("Failed to register Merkle root");
-      setIsValidating(false);
+    } finally {
+      setIsRegistering(false);
     }
   };
 
-  const handleValidateProof = () => {
+  const handleValidateProof = async () => {
     if (!merkleRoot || !proof || !leaf) {
       toast.error("Please fill in all fields");
       return;
@@ -82,50 +100,107 @@ const MerkleValidatorPage = () => {
       return;
     }
 
+    if (!window.ethereum) {
+      toast.error("MetaMask or wallet provider not found");
+      return;
+    }
+
+    setIsValidating(true);
+
     try {
-      setIsValidating(true);
-      validateProof({
-        address: getContractAddress("MerkleProofValidator"),
-        abi: MerkleProofValidatorContract.abi,
-        functionName: "validateProof",
-        args: [merkleRoot, proof, leaf],
-      });
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        getContractAddress("MerkleProofValidator"),
+        MerkleProofValidatorContract.abi,
+        signer,
+      );
+
+      // Parse proof - it should be an array of bytes32
+      // The proof input might be a comma-separated string or JSON array
+      let proofArray: string[];
+      try {
+        // Try to parse as JSON array first
+        if (proof.trim().startsWith("[")) {
+          proofArray = JSON.parse(proof);
+        } else {
+          // Otherwise, try comma-separated values
+          proofArray = proof.split(",").map((p) => p.trim());
+        }
+      } catch {
+        // If parsing fails, treat as single value
+        proofArray = [proof];
+      }
+
       toast.info("Validating proof...");
-    } catch (error) {
+
+      const tx = await contract.validateProof(merkleRoot, proofArray, leaf);
+      toast.info(`Transaction sent: ${tx.hash.slice(0, 10)}...`);
+
+      const receipt = await tx.wait();
+
+      // Parse events from receipt
+      const validateEvent = receipt.logs.find((log: any) => {
+        try {
+          const parsed = contract.interface.parseLog(log);
+          return parsed?.name === "ProofValidated" || parsed?.name === "ValidationResult";
+        } catch {
+          return false;
+        }
+      });
+
+      if (validateEvent) {
+        try {
+          const parsed = contract.interface.parseLog(validateEvent);
+          setValidationResult({
+            valid: parsed?.args?.valid || true,
+            merkleRoot: merkleRoot,
+            leaf: leaf,
+            txHash: receipt.hash,
+          });
+        } catch {
+          setValidationResult({
+            valid: true,
+            merkleRoot: merkleRoot,
+            leaf: leaf,
+            txHash: receipt.hash,
+          });
+        }
+      } else {
+        setValidationResult({
+          valid: true,
+          merkleRoot: merkleRoot,
+          leaf: leaf,
+          txHash: receipt.hash,
+        });
+      }
+
+      toast.success("Proof validation completed!");
+    } catch (error: unknown) {
+      let errorMessage = "Failed to validate proof";
+      if (error instanceof Error) {
+        if (error.message.includes("user rejected")) {
+          errorMessage = "Transaction rejected by user";
+        } else if (error.message.includes("execution reverted")) {
+          errorMessage = "Proof validation failed. The proof may be invalid.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      toast.error(errorMessage);
       console.error("Error validating proof:", error);
-      toast.error("Failed to validate proof");
+    } finally {
       setIsValidating(false);
     }
   };
-
-  // Reset form after successful operations
-  React.useEffect(() => {
-    if (isRegistered) {
-      setMerkleRoot("");
-      setDescription("");
-      setIsValidating(false);
-      toast.success("Merkle root registered successfully!");
-    }
-  }, [isRegistered]);
-
-  React.useEffect(() => {
-    if (isValidationComplete) {
-      setIsValidating(false);
-      toast.success("Proof validation completed!");
-    }
-  }, [isValidationComplete]);
 
   return (
     <div className="min-h-screen bg-[#121d33] text-white">
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-slate-400 bg-clip-text text-transparent">
-            Merkle Proof Validator
-          </h1>
-          <p className="text-xl text-gray-300">
-            Validate Merkle proofs and manage Merkle root registrations
-          </p>
+          <h1 className="text-4xl font-bold mb-4 text-white">Merkle Proof Validator</h1>
+          <p className="text-xl text-gray-300">Validate Merkle proofs and manage Merkle root registrations</p>
         </div>
 
         {/* Wallet Connection Check */}
@@ -134,18 +209,15 @@ const MerkleValidatorPage = () => {
             <div className="text-4xl mb-4">🔒</div>
             <h2 className="text-xl font-bold mb-4">Connect Your Wallet</h2>
             <p className="text-gray-300">
-              Please connect your wallet to any EVM-compatible network to use the Merkle Proof Validator.
-            </p>
-            <p className="text-xs text-gray-400 mt-2">
-              Supported testnets: ETN (Chain ID: 5201420) and Somnia (Chain ID: 50312)
+              Please connect your wallet to Mantle Sepolia Testnet to use the Merkle Proof Validator.
             </p>
           </div>
         ) : (
           <div className="space-y-8">
             {/* Register Merkle Root Section */}
-            <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54] shadow-xl">
-              <h2 className="text-2xl font-bold mb-6 text-purple-400">Register Merkle Root</h2>
-              
+            <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54]">
+              <h2 className="text-2xl font-bold mb-6 text-white">Register Merkle Root</h2>
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Merkle Root *</label>
@@ -154,11 +226,9 @@ const MerkleValidatorPage = () => {
                     value={merkleRoot}
                     onChange={(e) => setMerkleRoot(e.target.value)}
                     placeholder="0x..."
-                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition-all duration-200"
+                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
                   />
-                  <p className="text-sm text-gray-400 mt-1">
-                    Enter the Merkle root hash (0x + 64 hex characters)
-                  </p>
+                  <p className="text-sm text-gray-400 mt-1">Enter the Merkle root hash (0x + 64 hex characters)</p>
                 </div>
 
                 <div>
@@ -168,23 +238,21 @@ const MerkleValidatorPage = () => {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="e.g., NFT Whitelist Phase 1"
-                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition-all duration-200"
+                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
                   />
-                  <p className="text-sm text-gray-400 mt-1">
-                    Provide a description for this Merkle root
-                  </p>
+                  <p className="text-sm text-gray-400 mt-1">Provide a description for this Merkle root</p>
                 </div>
 
                 <button
                   onClick={handleRegisterMerkleRoot}
-                  disabled={isValidating || !merkleRoot || !description}
-                  className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 ${
-                    isValidating || !merkleRoot || !description
+                  disabled={isRegistering || !merkleRoot || !description}
+                  className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
+                    isRegistering || !merkleRoot || !description
                       ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                      : "bg-gradient-to-r from-purple-600 to-slate-600 hover:from-purple-700 hover:to-slate-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
                   }`}
                 >
-                  {isValidating ? (
+                  {isRegistering ? (
                     <div className="flex items-center justify-center gap-3">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                       Registering...
@@ -197,9 +265,9 @@ const MerkleValidatorPage = () => {
             </div>
 
             {/* Validate Proof Section */}
-            <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54] shadow-xl">
-              <h2 className="text-2xl font-bold mb-6 text-green-400">Validate Merkle Proof</h2>
-              
+            <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54]">
+              <h2 className="text-2xl font-bold mb-6 text-white">Validate Merkle Proof</h2>
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Merkle Root *</label>
@@ -208,22 +276,20 @@ const MerkleValidatorPage = () => {
                     value={merkleRoot}
                     onChange={(e) => setMerkleRoot(e.target.value)}
                     placeholder="0x..."
-                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-200"
+                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Proof *</label>
-                  <input
-                    type="text"
+                  <textarea
                     value={proof}
                     onChange={(e) => setProof(e.target.value)}
-                    placeholder="0x..."
-                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-200"
+                    placeholder='Enter proof array (e.g., ["0x...", "0x..."] or comma-separated)'
+                    rows={3}
+                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors resize-none"
                   />
-                  <p className="text-sm text-gray-400 mt-1">
-                    Enter the Merkle proof (array of hashes)
-                  </p>
+                  <p className="text-sm text-gray-400 mt-1">Enter the Merkle proof as a JSON array or comma-separated values</p>
                 </div>
 
                 <div>
@@ -233,20 +299,18 @@ const MerkleValidatorPage = () => {
                     value={leaf}
                     onChange={(e) => setLeaf(e.target.value)}
                     placeholder="0x..."
-                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all duration-200"
+                    className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
                   />
-                  <p className="text-sm text-gray-400 mt-1">
-                    Enter the leaf value to validate
-                  </p>
+                  <p className="text-sm text-gray-400 mt-1">Enter the leaf value to validate</p>
                 </div>
 
                 <button
                   onClick={handleValidateProof}
                   disabled={isValidating || !merkleRoot || !proof || !leaf}
-                  className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 ${
+                  className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
                     isValidating || !merkleRoot || !proof || !leaf
                       ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                      : "bg-gradient-to-r from-green-600 to-slate-600 hover:from-green-700 hover:to-slate-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                      : "bg-green-600 hover:bg-green-700 text-white"
                   }`}
                 >
                   {isValidating ? (
@@ -261,26 +325,35 @@ const MerkleValidatorPage = () => {
               </div>
             </div>
 
-            {/* Transaction Status */}
-            {(isRegistering || isValidatingTx) && (
-              <div className="bg-gradient-to-r from-blue-900/20 to-slate-900/20 p-6 rounded-xl border border-blue-500/30">
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
-                  <span className="text-blue-400 font-medium">
-                    {isRegistering ? "Registering Merkle root..." : "Validating proof..."}
-                  </span>
-                </div>
-              </div>
-            )}
-
             {/* Results Display */}
             {validationResult && (
-              <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54] shadow-xl">
-                <h3 className="text-xl font-bold mb-4 text-emerald-400">Validation Result</h3>
+              <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54]">
+                <h3 className="text-xl font-bold mb-4 text-green-400">Validation Result</h3>
                 <div className="bg-[#0f1a2e] p-4 rounded-lg border border-[#1e2a3a]">
-                  <pre className="text-sm text-gray-300 overflow-x-auto">
-                    {JSON.stringify(validationResult, null, 2)}
-                  </pre>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400">Status:</span>
+                      <span className={`font-semibold ${validationResult.valid ? "text-green-400" : "text-red-400"}`}>
+                        {validationResult.valid ? "Valid" : "Invalid"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400">Transaction Hash:</span>
+                      <code className="text-blue-400 text-sm">{validationResult.txHash}</code>
+                    </div>
+                    {validationResult.merkleRoot && (
+                      <div>
+                        <span className="text-gray-400">Merkle Root:</span>
+                        <code className="text-gray-300 text-sm ml-2">{validationResult.merkleRoot}</code>
+                      </div>
+                    )}
+                    {validationResult.leaf && (
+                      <div>
+                        <span className="text-gray-400">Leaf:</span>
+                        <code className="text-gray-300 text-sm ml-2">{validationResult.leaf}</code>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
