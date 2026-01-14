@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ERC20FactoryABI, ERC721FactoryABI, ERC1155FactoryABI, getContractAddress } from "../../ABI";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
+import { DocumentDuplicateIcon, ExternalLinkIcon, CheckCircleIcon, PlusIcon } from "@heroicons/react/24/outline";
 import ContractVerification from "../../components/ContractVerification";
+import { NETWORK_INFO } from "../../contracts/deployedContracts";
 
 type TokenType = "erc20" | "erc721" | "erc1155";
 
@@ -17,41 +19,66 @@ interface DeploymentResult {
   inputs: Record<string, string>;
 }
 
+interface StoredToken {
+  id: string;
+  type: string;
+  name: string;
+  symbol: string;
+  address: string;
+  createdAt: number;
+  txHash?: string;
+}
+
+const STORAGE_KEY = "onchainlab_created_tokens";
+const EXPLORER_URL = NETWORK_INFO.blockExplorer;
+
+// Helper function to get liquidity URL
+// Note: Currently using Uniswap as default. Update this if Mantle has native DEX tools
+const getLiquidityUrl = (tokenAddress: string, chainId: number): string => {
+  // For Mantle Sepolia Testnet (5003), Uniswap might not be deployed
+  // This is a guidance link - users may need to use mainnet or check if Uniswap is available on testnet
+  // Format: Uniswap V3 add liquidity URL
+  return `https://app.uniswap.org/#/add/ETH/${tokenAddress}/${chainId}`;
+};
+
 const TokenFactoryPage = () => {
   const { address, isConnected } = useAccount();
   const [selectedTokenType, setSelectedTokenType] = useState<TokenType>("erc20");
   const [isDeploying, setIsDeploying] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<DeploymentResult | null>(null);
-  const [networkInfo, setNetworkInfo] = useState<{ chainId: string; name: string } | null>(null);
+  const [myTokens, setMyTokens] = useState<StoredToken[]>([]);
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [selectedToken, setSelectedToken] = useState<StoredToken | null>(null);
+  const [viewMode, setViewMode] = useState<"create" | "view">("create");
 
-  // Check network on mount and when wallet connects
+  // Load tokens from localStorage on mount
   useEffect(() => {
-    const checkNetwork = async () => {
-      if (isConnected && window.ethereum) {
-        try {
-          console.log("🔍 Checking network...");
-          const provider = new ethers.BrowserProvider(window.ethereum);
-          const network = await provider.getNetwork();
-          console.log("🌐 Network detected:", network);
-          
-          const networkInfo = {
-            chainId: network.chainId.toString(),
-            name: network.name || "Unknown",
-          };
-          
-          console.log("📡 Setting network info:", networkInfo);
-          setNetworkInfo(networkInfo);
-        } catch (error) {
-          console.error("❌ Error checking network:", error);
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const tokens = JSON.parse(stored) as StoredToken[];
+          const sortedTokens = tokens.sort((a, b) => b.createdAt - a.createdAt);
+          setMyTokens(sortedTokens);
         }
-      } else {
-        console.log("⚠️ Wallet not connected or ethereum not available");
+      } catch (error) {
+        console.error("Error loading tokens from localStorage:", error);
       }
-    };
+    }
+  }, []);
 
-    checkNetwork();
-  }, [isConnected]);
+  // Save tokens to localStorage
+  const saveTokenToStorage = (token: StoredToken) => {
+    try {
+      const existingTokens = myTokens;
+      const updatedTokens = [token, ...existingTokens];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTokens));
+      setMyTokens(updatedTokens.sort((a, b) => b.createdAt - a.createdAt));
+    } catch (error) {
+      console.error("Error saving token to localStorage:", error);
+    }
+  };
 
   const [formData, setFormData] = useState({
     name: "",
@@ -67,12 +94,12 @@ const TokenFactoryPage = () => {
     supplyTracked: true,
   });
 
-  const handleInputChange = (field: string, value: string | number | boolean) => {
+  const handleInputChange = useCallback((field: string, value: string | number | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
     }));
-  };
+  }, []);
 
   const resetForm = () => {
     setFormData({
@@ -94,6 +121,39 @@ const TokenFactoryPage = () => {
     setShowSuccessModal(false);
     setDeploymentResult(null);
     resetForm();
+    setViewMode("create");
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedAddress(text);
+      toast.success("Address copied to clipboard!");
+      setTimeout(() => setCopiedAddress(null), 2000);
+    } catch (err) {
+      toast.error("Failed to copy address");
+    }
+  };
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const handleTokenClick = (token: StoredToken) => {
+    setSelectedToken(token);
+    setViewMode("view");
+  };
+
+  const handleCreateNew = () => {
+    setSelectedToken(null);
+    setViewMode("create");
+    resetForm();
   };
 
   const deployToken = async () => {
@@ -107,36 +167,22 @@ const TokenFactoryPage = () => {
       return;
     }
 
-    console.log("🚀 Starting token deployment...");
-    console.log("Network Info:", networkInfo);
-    console.log("Selected Token Type:", selectedTokenType);
-
     setIsDeploying(true);
 
     try {
-      // Check if window.ethereum exists
       if (!window.ethereum) {
         throw new Error("MetaMask or wallet provider not found. Please install MetaMask.");
       }
 
       const provider = new ethers.BrowserProvider(window.ethereum);
-
       const signer = await provider.getSigner();
-
-      let deployedAddress: string = ""; // Initialize deployedAddress
+      let deployedAddress: string = "";
+      let txHash: string = "";
 
       switch (selectedTokenType) {
         case "erc20":
           const erc20Address = getContractAddress("ERC20Factory");
-          console.log("🔗 Using ERC20Factory address:", erc20Address);
-          
-          const erc20Contract = new ethers.Contract(
-            erc20Address, // Use network-aware address
-            ERC20FactoryABI,
-            signer,
-          );
-
-          // Use parseUnits with explicit decimals to avoid ENS resolution
+          const erc20Contract = new ethers.Contract(erc20Address, ERC20FactoryABI, signer);
           const initialSupplyWei = ethers.parseUnits(formData.initialSupply, formData.decimals);
 
           const erc20Tx = await erc20Contract.createToken(
@@ -146,6 +192,7 @@ const TokenFactoryPage = () => {
             formData.decimals,
           );
 
+          txHash = erc20Tx.hash;
           const erc20Receipt = await erc20Tx.wait();
           const erc20Event = erc20Receipt.logs.find((log: any) => {
             try {
@@ -158,20 +205,13 @@ const TokenFactoryPage = () => {
 
           if (erc20Event) {
             const parsed = erc20Contract.interface.parseLog(erc20Event);
-            if (parsed) deployedAddress = parsed.args.tokenAddress; // Null check
+            if (parsed) deployedAddress = parsed.args.tokenAddress;
           }
           break;
 
         case "erc721":
           const erc721Address = getContractAddress("ERC721Factory");
-          console.log("🔗 Using ERC721Factory address:", erc721Address);
-          
-          const erc721Contract = new ethers.Contract(
-            erc721Address, // Use network-aware address
-            ERC721FactoryABI,
-            signer,
-          );
-
+          const erc721Contract = new ethers.Contract(erc721Address, ERC721FactoryABI, signer);
           const maxSupply = formData.maxSupply ? parseInt(formData.maxSupply) : 0;
 
           const erc721Tx = await erc721Contract.createCollection(
@@ -184,6 +224,7 @@ const TokenFactoryPage = () => {
             formData.pausable,
           );
 
+          txHash = erc721Tx.hash;
           const erc721Receipt = await erc721Tx.wait();
           const erc721Event = erc721Receipt.logs.find((log: any) => {
             try {
@@ -196,19 +237,13 @@ const TokenFactoryPage = () => {
 
           if (erc721Event) {
             const parsed = erc721Contract.interface.parseLog(erc721Event);
-            if (parsed) deployedAddress = parsed.args.contractAddress; // Null check
+            if (parsed) deployedAddress = parsed.args.contractAddress;
           }
           break;
 
         case "erc1155":
           const erc1155Address = getContractAddress("ERC1155Factory");
-          console.log("🔗 Using ERC1155Factory address:", erc1155Address);
-          
-          const erc1155Contract = new ethers.Contract(
-            erc1155Address, // Use network-aware address
-            ERC1155FactoryABI,
-            signer,
-          );
+          const erc1155Contract = new ethers.Contract(erc1155Address, ERC1155FactoryABI, signer);
 
           const erc1155Tx = await erc1155Contract.createMultiToken(
             formData.name,
@@ -219,6 +254,7 @@ const TokenFactoryPage = () => {
             formData.supplyTracked,
           );
 
+          txHash = erc1155Tx.hash;
           const erc1155Receipt = await erc1155Tx.wait();
           const erc1155Event = erc1155Receipt.logs.find((log: any) => {
             try {
@@ -231,7 +267,7 @@ const TokenFactoryPage = () => {
 
           if (erc1155Event) {
             const parsed = erc1155Contract.interface.parseLog(erc1155Event);
-            if (parsed) deployedAddress = parsed.args.contractAddress; // Null check
+            if (parsed) deployedAddress = parsed.args.contractAddress;
           }
           break;
 
@@ -240,9 +276,6 @@ const TokenFactoryPage = () => {
       }
 
       if (deployedAddress) {
-        console.log("✅ Token deployed successfully at:", deployedAddress);
-        
-        // Create deployment result object
         const result: DeploymentResult = {
           type: selectedTokenType.toUpperCase(),
           address: deployedAddress,
@@ -271,14 +304,21 @@ const TokenFactoryPage = () => {
           },
         };
 
-        console.log("📋 Setting deployment result:", result);
+        const storedToken: StoredToken = {
+          id: `${deployedAddress}-${Date.now()}`,
+          type: selectedTokenType.toUpperCase(),
+          name: formData.name,
+          symbol: formData.symbol,
+          address: deployedAddress,
+          createdAt: Date.now(),
+          txHash: txHash,
+        };
+        saveTokenToStorage(storedToken);
+
         setDeploymentResult(result);
         setShowSuccessModal(true);
-        console.log("🎉 Success modal should now be visible!");
-
         toast.success(`${selectedTokenType.toUpperCase()} token deployed successfully!`);
-      } else {
-        console.log("❌ No deployed address found in transaction receipt");
+        resetForm();
       }
     } catch (error: any) {
       console.error("Deployment error:", error);
@@ -290,8 +330,6 @@ const TokenFactoryPage = () => {
         errorMessage = "Insufficient funds for deployment";
       } else if (error.message.includes("execution reverted")) {
         errorMessage = "Contract rejected the deployment";
-      } else if (error.message.includes("ENS") || error.message.includes("UNSUPPORTED_OPERATION")) {
-        errorMessage = "Network configuration error. Please ensure you're connected to an EVM-compatible network.";
       }
 
       toast.error(errorMessage);
@@ -304,157 +342,105 @@ const TokenFactoryPage = () => {
   const SuccessModal = (): React.JSX.Element | null => {
     if (!showSuccessModal || !deploymentResult) return null;
 
-    // Get network display information
-    const getNetworkDisplay = () => {
-      if (!networkInfo) {
-        return {
-          name: "Unknown Network",
-          chainId: "Unknown",
-          explorer: "https://etherscan.io",
-          color: "text-gray-400",
-          bgColor: "bg-gray-900/20",
-          borderColor: "border-gray-500/30"
-        };
-      }
-      
-      const chainId = networkInfo.chainId;
-      if (chainId === "5201420") {
-        return {
-          name: "ETN Testnet",
-          chainId: "5201420",
-          explorer: "https://testnet-blockexplorer.electroneum.com",
-          color: "text-blue-400",
-          bgColor: "bg-blue-900/20",
-          borderColor: "border-blue-500/30"
-        };
-      } else if (chainId === "50312") {
-        return {
-          name: "Somnia Testnet", 
-          chainId: "50312",
-          explorer: "https://shannon-explorer.somnia.network",
-          color: "text-purple-400",
-          bgColor: "bg-purple-900/20",
-          borderColor: "border-purple-500/30"
-        };
-      } else {
-        return {
-          name: networkInfo.name || "Unknown Network",
-          chainId: chainId,
-          explorer: "https://etherscan.io",
-          color: "text-gray-400",
-          bgColor: "bg-gray-900/20",
-          borderColor: "border-gray-500/30"
-        };
-      }
-    };
-
-    const network = getNetworkDisplay();
-
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-[#1c2941] rounded-xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-[#2a3b54] shadow-2xl">
-          {/* Header */}
+        <div className="bg-[#1c2941] rounded-xl p-8 max-w-2xl w-full border border-[#2a3b54] shadow-2xl">
           <div className="text-center mb-8">
             <div className="text-6xl mb-4">🎉</div>
-            <h2 className="text-3xl font-bold text-emerald-400 mb-2">Token Deployed Successfully!</h2>
-            <p className="text-xl text-gray-300">Your {deploymentResult.type} token has been created on {network.name}</p>
+            <h2 className="text-3xl font-bold text-white mb-2">Token Deployed Successfully!</h2>
+            <p className="text-gray-300">Your {deploymentResult.type} token has been created</p>
           </div>
 
-          {/* Network Information */}
-          <div className={`${network.bgColor} rounded-xl p-6 mb-6 border ${network.borderColor}`}>
-            <h3 className="text-lg font-semibold mb-4 text-emerald-400">Network Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${network.color.replace('text-', 'bg-')}`}></div>
-                <div>
-                  <div className="text-white font-medium">{network.name}</div>
-                  <div className="text-sm text-gray-400">Chain ID: {network.chainId}</div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-400 mb-1">Block Explorer</div>
-                <a 
-                  href={`${network.explorer}/address/${deploymentResult.address}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`text-sm ${network.color} hover:underline`}
-                >
-                  View on Explorer →
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Token Info Display */}
-          <div className="bg-[#0f1a2e] rounded-xl p-6 mb-6 border border-[#1e2a3a] text-center">
-            <h3 className="text-lg font-semibold mb-3 text-emerald-400">Token Details</h3>
-            <div className="text-2xl font-bold text-white mb-2">{deploymentResult.name}</div>
-            <div className="text-lg text-emerald-400 mb-4">{deploymentResult.symbol}</div>
-            <div className="bg-[#1a2332] p-3 rounded-lg border border-[#2a3b54]">
-              <div className="text-sm text-gray-400 mb-1">Contract Address</div>
-              <div className="text-sm text-emerald-400 font-mono break-all">{deploymentResult.address}</div>
-            </div>
-          </div>
-
-          {/* Configuration Summary */}
           <div className="bg-[#0f1a2e] rounded-xl p-6 mb-6 border border-[#1e2a3a]">
-            <h3 className="text-lg font-semibold mb-4 text-emerald-400">Configuration</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(deploymentResult.inputs).map(([key, value]) => (
-                <div key={key} className="flex justify-between items-center p-2 bg-[#1a2332] rounded-lg">
-                  <span className="text-gray-400 text-sm">{key}:</span>
-                  <span className="text-white font-medium text-sm">{value}</span>
+            <h3 className="text-lg font-semibold mb-4 text-white">Token Details</h3>
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm text-gray-400 mb-1">Name</div>
+                <div className="text-white font-medium">{deploymentResult.name}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-400 mb-1">Symbol</div>
+                <div className="text-white font-medium">{deploymentResult.symbol}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-400 mb-1">Type</div>
+                <div className="text-white font-medium">{deploymentResult.type}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-400 mb-1">Contract Address</div>
+                <div className="flex items-center gap-2">
+                  <code className="text-blue-400 font-mono text-sm break-all">{deploymentResult.address}</code>
+                  <button
+                    onClick={() => copyToClipboard(deploymentResult.address)}
+                    className="flex-shrink-0 p-1 hover:bg-[#1a2332] rounded transition-colors"
+                  >
+                    {copiedAddress === deploymentResult.address ? (
+                      <CheckCircleIcon className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <DocumentDuplicateIcon className="h-5 w-5 text-gray-400" />
+                    )}
+                  </button>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
 
-          {/* Contract Verification */}
           <div className="mb-6">
             <ContractVerification
               contractAddress={deploymentResult.address}
-              networkChainId={networkInfo?.chainId || ""}
+              networkChainId={NETWORK_INFO.chainId.toString()}
               contractType="token"
               contractName={deploymentResult.name}
             />
           </div>
 
-          {/* Next Steps */}
-          <div className="bg-gradient-to-r from-slate-800/50 to-slate-700/50 rounded-xl p-6 mb-6 border border-[#2a3b54]">
-            <h3 className="text-lg font-semibold mb-4 text-amber-400">Next Steps</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
-              <div className="space-y-2">
-                <div>• <strong>Verify Contract:</strong> Use the verification guide above to verify your contract</div>
-                <div>• <strong>Add to Wallet:</strong> Import the token address to your wallet</div>
-                <div>• <strong>Test Functions:</strong> Try minting, transferring, or other features</div>
-              </div>
-              <div className="space-y-2">
-                <div>• <strong>Share Address:</strong> Share the contract address with your community</div>
-                <div>• <strong>Monitor Activity:</strong> Track transactions and usage on the explorer</div>
-                <div>• <strong>Documentation:</strong> Keep track of your token&apos;s configuration</div>
+          {/* Add Liquidity Guidance (only for ERC20 tokens) */}
+          {deploymentResult.type === "ERC20" && (
+            <div className="mb-6 bg-blue-900/20 rounded-xl p-4 border border-blue-500/30">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <svg className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-blue-400 mb-1">Add Liquidity</h4>
+                  <p className="text-xs text-gray-300 mb-3">
+                    To make your token tradable, consider adding liquidity on Uniswap. This allows others to swap between your token and ETH.
+                  </p>
+                  <a
+                    href={getLiquidityUrl(deploymentResult.address, NETWORK_INFO.chainId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Add Liquidity on Uniswap
+                    <ExternalLinkIcon className="h-4 w-4" />
+                  </a>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              onClick={deployAnother}
-              className="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02]"
-            >
-              Deploy Another Token
-            </button>
+          <div className="flex gap-4">
             <a
-              href={`${network.explorer}/address/${deploymentResult.address}`}
+              href={`${EXPLORER_URL}/address/${deploymentResult.address}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02] text-center flex items-center justify-center"
+              className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-center flex items-center justify-center gap-2"
             >
               View on Explorer
+              <ExternalLinkIcon className="h-5 w-5" />
             </a>
             <button
+              onClick={deployAnother}
+              className="flex-1 py-3 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
+            >
+              Deploy Another
+            </button>
+            <button
               onClick={() => setShowSuccessModal(false)}
-              className="w-full py-4 px-6 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02]"
+              className="flex-1 py-3 px-6 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
             >
               Close
             </button>
@@ -464,254 +450,554 @@ const TokenFactoryPage = () => {
     );
   };
 
+  // Token Details View Component
+  const TokenDetailsView = ({ token }: { token: StoredToken }) => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white">{token.name}</h2>
+            <p className="text-gray-400">{token.symbol}</p>
+          </div>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400">
+            {token.type}
+          </span>
+        </div>
+
+        <div className="bg-[#0f1a2e] rounded-xl p-6 border border-[#1e2a3a]">
+          <h3 className="text-lg font-semibold mb-4 text-white">Token Information</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="text-sm text-gray-400 mb-1">Contract Address</div>
+              <div className="flex items-center gap-2">
+                <code className="text-blue-400 font-mono text-sm break-all">{token.address}</code>
+                <button
+                  onClick={() => copyToClipboard(token.address)}
+                  className="flex-shrink-0 p-1 hover:bg-[#1a2332] rounded transition-colors"
+                >
+                  {copiedAddress === token.address ? (
+                    <CheckCircleIcon className="h-5 w-5 text-green-400" />
+                  ) : (
+                    <DocumentDuplicateIcon className="h-5 w-5 text-gray-400" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400 mb-1">Created</div>
+              <div className="text-white">{formatDate(token.createdAt)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <ContractVerification
+            contractAddress={token.address}
+            networkChainId={NETWORK_INFO.chainId.toString()}
+            contractType="token"
+            contractName={token.name}
+          />
+        </div>
+
+        {/* Add Liquidity Guidance (only for ERC20 tokens) */}
+        {token.type === "ERC20" && (
+          <div className="mb-6 bg-blue-900/20 rounded-xl p-4 border border-blue-500/30">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-blue-400 mb-1">Add Liquidity</h4>
+                <p className="text-xs text-gray-300 mb-3">
+                  To make your token tradable, consider adding liquidity on Uniswap. This allows others to swap between your token and ETH.
+                </p>
+                <a
+                  href={getLiquidityUrl(token.address, NETWORK_INFO.chainId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Add Liquidity on Uniswap
+                  <ExternalLinkIcon className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-4">
+          <a
+            href={`${EXPLORER_URL}/address/${token.address}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-center flex items-center justify-center gap-2"
+          >
+            View on Explorer
+            <ExternalLinkIcon className="h-5 w-5" />
+          </a>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#121d33] text-white">
-      <div className="max-w-6xl mx-auto px-4 py-12">
-        {/* Header */}
+      <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-slate-400 bg-clip-text text-transparent">
-            Token Factory
-          </h1>
+          <h1 className="text-4xl font-bold mb-4 text-white">Token Factory</h1>
           <p className="text-xl text-gray-300">Deploy ERC20, ERC721, and ERC1155 tokens with custom configurations</p>
         </div>
 
-        {/* Wallet Connection Check */}
         {!isConnected ? (
           <div className="text-center p-8 bg-[#1c2941] rounded-xl border border-[#2a3b54]">
             <div className="text-4xl mb-4">🔒</div>
             <h2 className="text-xl font-bold mb-4">Connect Your Wallet</h2>
-            <p className="text-gray-300">Please connect your wallet to any EVM-compatible network to create tokens.</p>
+            <p className="text-gray-300">Please connect your wallet to Mantle Sepolia Testnet to create tokens.</p>
           </div>
         ) : (
-          <>
-            {/* Network Status */}
-            <div className="max-w-4xl mx-auto mb-6">
-              <div className="p-4 rounded-xl border bg-green-900/20 border-green-500/30">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span className="text-sm font-medium">
-                      Network: {networkInfo?.name || "Checking..."} (Chain ID: {networkInfo?.chainId || "..."})
-                    </span>
-                  </div>
-                  <span className="text-green-400 text-sm">✓ EVM-Compatible Network</span>
+          <div className="flex gap-6">
+            {/* Sidebar - My Tokens List */}
+            <div className="w-80 flex-shrink-0">
+              <div className="bg-[#1c2941] rounded-xl border border-[#2a3b54] overflow-hidden sticky top-4">
+                <div className="p-4 border-b border-[#2a3b54] flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-white">My Tokens</h2>
+                  <button
+                    onClick={handleCreateNew}
+                    className={`p-2 rounded-lg transition-colors ${
+                      viewMode === "create"
+                        ? "bg-blue-600 text-white"
+                        : "bg-[#0f1a2e] text-gray-400 hover:bg-[#1a2332] hover:text-white"
+                    }`}
+                    title="Create new token"
+                  >
+                    <PlusIcon className="h-5 w-5" />
+                  </button>
                 </div>
-                <div className="mt-3 text-sm text-green-300">
-                  <p>Connected to an EVM-compatible network. You can now deploy tokens!</p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    Supported testnets: ETN (Chain ID: 5201420) and Somnia (Chain ID: 50312)
-                  </p>
-                </div>
-                
-                {/* Debug Information */}
-                <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
-                  <h4 className="text-sm font-semibold text-blue-300 mb-2">Debug Info</h4>
-                  <div className="text-xs text-blue-200 space-y-1">
-                    <div>Current Network: {networkInfo?.name || "Unknown"}</div>
-                    <div>Chain ID: {networkInfo?.chainId || "Unknown"}</div>
-                    <div>ERC20 Factory: {getContractAddress("ERC20Factory")}</div>
-                    <div>ERC721 Factory: {getContractAddress("ERC721Factory")}</div>
-                    <div>ERC1155 Factory: {getContractAddress("ERC1155Factory")}</div>
-                  </div>
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+                  {myTokens.length === 0 ? (
+                    <div className="p-6 text-center">
+                      <p className="text-gray-400 text-sm">No tokens created yet</p>
+                      <p className="text-gray-500 text-xs mt-2">Create your first token to see it here</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[#2a3b54]">
+                      {myTokens.map(token => (
+                        <button
+                          key={token.id}
+                          onClick={() => handleTokenClick(token)}
+                          className={`w-full p-4 text-left hover:bg-[#0f1a2e] transition-colors ${
+                            selectedToken?.id === token.id && viewMode === "view"
+                              ? "bg-[#0f1a2e] border-l-4 border-blue-500"
+                              : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-white truncate">{token.name}</div>
+                              <div className="text-sm text-gray-400 truncate">{token.symbol}</div>
+                              <div className="text-xs text-gray-500 mt-1">{formatDate(token.createdAt)}</div>
+                            </div>
+                            <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                              {token.type}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54] shadow-xl">
-                <h2 className="text-2xl font-bold mb-6">Create New Token</h2>
+            {/* Main Content Area */}
+            <div className="flex-1 min-w-0">
+              <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54]">
+                {viewMode === "create" || !selectedToken ? (
+                  <>
+                    <h2 className="text-2xl font-bold mb-6 text-white">Create New Token</h2>
+                    <form
+                      onSubmit={e => {
+                        e.preventDefault();
+                        deployToken();
+                      }}
+                      className="space-y-6"
+                    >
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-300 mb-3">Token Type</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {(["erc20", "erc721", "erc1155"] as TokenType[]).map(type => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => setSelectedTokenType(type)}
+                              className={`p-3 rounded-lg border transition-all duration-200 ${
+                                selectedTokenType === type
+                                  ? "border-blue-500 bg-blue-500/20 text-blue-400"
+                                  : "border-[#2a3b54] hover:border-blue-500 hover:bg-[#1a2332] text-gray-300"
+                              }`}
+                            >
+                              {type.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                {/* Token Type Selection */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-300 mb-3">Token Type</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(["erc20", "erc721", "erc1155"] as TokenType[]).map(type => (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Token Name *</label>
+                          <input
+                            type="text"
+                            value={formData.name}
+                            onChange={e => handleInputChange("name", e.target.value)}
+                            placeholder="My Awesome Token"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Token Symbol *</label>
+                          <input
+                            type="text"
+                            value={formData.symbol}
+                            onChange={e => handleInputChange("symbol", e.target.value)}
+                            placeholder="MAT"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {selectedTokenType === "erc20" && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Initial Supply *</label>
+                            <input
+                              type="text"
+                              value={formData.initialSupply}
+                              onChange={e => handleInputChange("initialSupply", e.target.value)}
+                              placeholder="1000000"
+                              className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Decimals *</label>
+                            <select
+                              value={formData.decimals}
+                              onChange={e => handleInputChange("decimals", parseInt(e.target.value))}
+                              className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                            >
+                              <option value={18}>18 (Standard)</option>
+                              <option value={6}>6 (USDC style)</option>
+                              <option value={8}>8 (Bitcoin style)</option>
+                              <option value={0}>0 (Whole numbers)</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {(selectedTokenType === "erc721" || selectedTokenType === "erc1155") && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            {selectedTokenType === "erc721" ? "Base URI" : "Metadata URI"} *
+                          </label>
+                          <input
+                            type="text"
+                            value={selectedTokenType === "erc721" ? formData.baseURI : formData.uri}
+                            onChange={e => handleInputChange(selectedTokenType === "erc721" ? "baseURI" : "uri", e.target.value)}
+                            placeholder="https://api.example.com/metadata/"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
+                      )}
+
+                      {selectedTokenType === "erc721" && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Maximum Supply</label>
+                          <input
+                            type="text"
+                            value={formData.maxSupply}
+                            onChange={e => handleInputChange("maxSupply", e.target.value)}
+                            placeholder="10000 (0 for unlimited)"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-white">Configuration Options</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.mintable}
+                              onChange={e => handleInputChange("mintable", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Mintable</span>
+                          </label>
+
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.burnable}
+                              onChange={e => handleInputChange("burnable", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Burnable</span>
+                          </label>
+
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.pausable}
+                              onChange={e => handleInputChange("pausable", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Pausable</span>
+                          </label>
+                        </div>
+
+                        {selectedTokenType === "erc1155" && (
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.supplyTracked}
+                              onChange={e => handleInputChange("supplyTracked", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Track Total Supply</span>
+                          </label>
+                        )}
+                      </div>
+
                       <button
-                        key={type}
-                        onClick={() => setSelectedTokenType(type)}
-                        className={`p-3 rounded-lg border transition-all duration-200 ${
-                          selectedTokenType === type
-                            ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
-                            : "border-[#2a3b54] hover:border-emerald-500 hover:bg-[#1a2332]"
+                        type="submit"
+                        disabled={isDeploying}
+                        className={`w-full py-4 px-6 rounded-lg font-medium transition-colors ${
+                          isDeploying
+                            ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                            : "bg-blue-600 hover:bg-blue-700 text-white"
                         }`}
                       >
-                        {type.toUpperCase()}
+                        {isDeploying ? (
+                          <div className="flex items-center justify-center gap-3">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            Deploying {selectedTokenType.toUpperCase()} Token...
+                          </div>
+                        ) : (
+                          `Deploy ${selectedTokenType.toUpperCase()} Token`
+                        )}
                       </button>
-                    ))}
-                  </div>
-                </div>
-
-                <form
-                  onSubmit={e => {
-                    e.preventDefault();
-                    deployToken();
-                  }}
-                  className="space-y-6"
-                >
-                  {/* Basic Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Token Name *</label>
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={e => handleInputChange("name", e.target.value)}
-                        placeholder="My Awesome Token"
-                        className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500 transition-all duration-200"
-                        required
-                      />
+                    </form>
+                  </>
+                ) : selectedToken ? (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-2xl font-bold text-white">Token Details</h2>
+                      <button
+                        onClick={handleCreateNew}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <PlusIcon className="h-5 w-5" />
+                        Create New
+                      </button>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Token Symbol *</label>
-                      <input
-                        type="text"
-                        value={formData.symbol}
-                        onChange={e => handleInputChange("symbol", e.target.value)}
-                        placeholder="MAT"
-                        className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500 transition-all duration-200"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Token Type Specific Fields */}
-                  {selectedTokenType === "erc20" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Initial Supply *</label>
-                        <input
-                          type="text"
-                          value={formData.initialSupply}
-                          onChange={e => handleInputChange("initialSupply", e.target.value)}
-                          placeholder="1000000"
-                          className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500 transition-all duration-200"
-                          required
-                        />
+                    <TokenDetailsView token={selectedToken} />
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-bold mb-6 text-white">Create New Token</h2>
+                    <form
+                      onSubmit={e => {
+                        e.preventDefault();
+                        deployToken();
+                      }}
+                      className="space-y-6"
+                    >
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-300 mb-3">Token Type</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {(["erc20", "erc721", "erc1155"] as TokenType[]).map(type => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => setSelectedTokenType(type)}
+                              className={`p-3 rounded-lg border transition-all duration-200 ${
+                                selectedTokenType === type
+                                  ? "border-blue-500 bg-blue-500/20 text-blue-400"
+                                  : "border-[#2a3b54] hover:border-blue-500 hover:bg-[#1a2332] text-gray-300"
+                              }`}
+                            >
+                              {type.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Decimals *</label>
-                        <select
-                          value={formData.decimals}
-                          onChange={e => handleInputChange("decimals", parseInt(e.target.value))}
-                          className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-all duration-200"
-                        >
-                          <option value={18}>18 (Standard)</option>
-                          <option value={6}>6 (USDC style)</option>
-                          <option value={8}>8 (Bitcoin style)</option>
-                          <option value={0}>0 (Whole numbers)</option>
-                        </select>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Token Name *</label>
+                          <input
+                            type="text"
+                            value={formData.name}
+                            onChange={e => handleInputChange("name", e.target.value)}
+                            placeholder="My Awesome Token"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Token Symbol *</label>
+                          <input
+                            type="text"
+                            value={formData.symbol}
+                            onChange={e => handleInputChange("symbol", e.target.value)}
+                            placeholder="MAT"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
 
-                  {(selectedTokenType === "erc721" || selectedTokenType === "erc1155") && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        {selectedTokenType === "erc721" ? "Base URI" : "Metadata URI"} *
-                      </label>
-                      <input
-                        type="text"
-                        value={selectedTokenType === "erc721" ? formData.baseURI : formData.uri}
-                        onChange={e =>
-                          handleInputChange(selectedTokenType === "erc721" ? "baseURI" : "uri", e.target.value)
-                        }
-                        placeholder="https://api.example.com/metadata/"
-                        className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500 transition-all duration-200"
-                        required
-                      />
-                    </div>
-                  )}
+                      {selectedTokenType === "erc20" && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Initial Supply *</label>
+                            <input
+                              type="text"
+                              value={formData.initialSupply}
+                              onChange={e => handleInputChange("initialSupply", e.target.value)}
+                              placeholder="1000000"
+                              className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                              required
+                            />
+                          </div>
 
-                  {selectedTokenType === "erc721" && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Maximum Supply</label>
-                      <input
-                        type="text"
-                        value={formData.maxSupply}
-                        onChange={e => handleInputChange("maxSupply", e.target.value)}
-                        placeholder="10000 (0 for unlimited)"
-                        className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500 transition-all duration-200"
-                      />
-                    </div>
-                  )}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Decimals *</label>
+                            <select
+                              value={formData.decimals}
+                              onChange={e => handleInputChange("decimals", parseInt(e.target.value))}
+                              className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                            >
+                              <option value={18}>18 (Standard)</option>
+                              <option value={6}>6 (USDC style)</option>
+                              <option value={8}>8 (Bitcoin style)</option>
+                              <option value={0}>0 (Whole numbers)</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
 
-                  {/* Configuration Options */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-emerald-400">Configuration Options</h3>
+                      {(selectedTokenType === "erc721" || selectedTokenType === "erc1155") && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            {selectedTokenType === "erc721" ? "Base URI" : "Metadata URI"} *
+                          </label>
+                          <input
+                            type="text"
+                            value={selectedTokenType === "erc721" ? formData.baseURI : formData.uri}
+                            onChange={e => handleInputChange(selectedTokenType === "erc721" ? "baseURI" : "uri", e.target.value)}
+                            placeholder="https://api.example.com/metadata/"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                            required
+                          />
+                        </div>
+                      )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.mintable}
-                          onChange={e => handleInputChange("mintable", e.target.checked)}
-                          className="w-4 h-4 text-emerald-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-emerald-500 focus:ring-2"
-                        />
-                        <span className="text-sm">Mintable</span>
-                      </label>
+                      {selectedTokenType === "erc721" && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Maximum Supply</label>
+                          <input
+                            type="text"
+                            value={formData.maxSupply}
+                            onChange={e => handleInputChange("maxSupply", e.target.value)}
+                            placeholder="10000 (0 for unlimited)"
+                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
+                        </div>
+                      )}
 
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.burnable}
-                          onChange={e => handleInputChange("burnable", e.target.checked)}
-                          className="w-4 h-4 text-emerald-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-emerald-500 focus:ring-2"
-                        />
-                        <span className="text-sm">Burnable</span>
-                      </label>
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-white">Configuration Options</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.mintable}
+                              onChange={e => handleInputChange("mintable", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Mintable</span>
+                          </label>
 
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.pausable}
-                          onChange={e => handleInputChange("pausable", e.target.checked)}
-                          className="w-4 h-4 text-emerald-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-emerald-500 focus:ring-2"
-                        />
-                        <span className="text-sm">Pausable</span>
-                      </label>
-                    </div>
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.burnable}
+                              onChange={e => handleInputChange("burnable", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Burnable</span>
+                          </label>
 
-                    {selectedTokenType === "erc1155" && (
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.supplyTracked}
-                          onChange={e => handleInputChange("supplyTracked", e.target.checked)}
-                          className="w-4 h-4 text-emerald-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-emerald-500 focus:ring-2"
-                        />
-                        <span className="text-sm">Track Total Supply</span>
-                      </label>
-                    )}
-                  </div>
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.pausable}
+                              onChange={e => handleInputChange("pausable", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Pausable</span>
+                          </label>
+                        </div>
 
-                  {/* Deploy Button */}
-                  <button
-                    type="submit"
-                    disabled={isDeploying}
-                    className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 ${
-                      isDeploying
-                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-emerald-600 to-slate-600 hover:from-emerald-700 hover:to-slate-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-                    }`}
-                  >
-                    {isDeploying ? (
-                      <div className="flex items-center justify-center gap-3">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        Deploying {selectedTokenType.toUpperCase()} Token...
+                        {selectedTokenType === "erc1155" && (
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.supplyTracked}
+                              onChange={e => handleInputChange("supplyTracked", e.target.checked)}
+                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                            <span className="text-sm text-gray-300">Track Total Supply</span>
+                          </label>
+                        )}
                       </div>
-                    ) : (
-                      `Deploy ${selectedTokenType.toUpperCase()} Token`
-                    )}
-                  </button>
-                </form>
+
+                      <button
+                        type="submit"
+                        disabled={isDeploying}
+                        className={`w-full py-4 px-6 rounded-lg font-medium transition-colors ${
+                          isDeploying
+                            ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                            : "bg-blue-600 hover:bg-blue-700 text-white"
+                        }`}
+                      >
+                        {isDeploying ? (
+                          <div className="flex items-center justify-center gap-3">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            Deploying {selectedTokenType.toUpperCase()} Token...
+                          </div>
+                        ) : (
+                          `Deploy ${selectedTokenType.toUpperCase()} Token`
+                        )}
+                      </button>
+                    </form>
+                  </>
+                )}
               </div>
             </div>
-          </>
+          </div>
         )}
 
-        {/* Success Modal */}
         <SuccessModal />
       </div>
     </div>
