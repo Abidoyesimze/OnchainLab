@@ -5,6 +5,7 @@ import { MerkleProofValidatorContract, getContractAddress } from "../../ABI";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
+import { NETWORK_INFO } from "../../contracts/deployedContracts";
 
 const MerkleValidatorPage = () => {
   const { address, isConnected } = useAccount();
@@ -203,17 +204,7 @@ const MerkleValidatorPage = () => {
           <p className="text-xl text-gray-300">Validate Merkle proofs and manage Merkle root registrations</p>
         </div>
 
-        {/* Wallet Connection Check */}
-        {!isConnected ? (
-          <div className="text-center p-8 bg-[#1c2941] rounded-xl border border-[#2a3b54]">
-            <div className="text-4xl mb-4">🔒</div>
-            <h2 className="text-xl font-bold mb-4">Connect Your Wallet</h2>
-            <p className="text-gray-300">
-              Please connect your wallet to Mantle Sepolia Testnet to use the Merkle Proof Validator.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-8">
+        <div className="space-y-8">
             {/* Register Merkle Root Section */}
             <div className="bg-[#1c2941] p-8 rounded-xl border border-[#2a3b54]">
               <h2 className="text-2xl font-bold mb-6 text-white">Register Merkle Root</h2>
