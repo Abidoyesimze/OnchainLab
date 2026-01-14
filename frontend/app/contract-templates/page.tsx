@@ -282,8 +282,14 @@ const ContractTemplatesPage = () => {
       toast.info("Transaction sent! Waiting for confirmation...");
 
       // Wait for transaction confirmation
+      toast.info(`Transaction sent: ${tx.hash.slice(0, 10)}...`);
       const receipt = await tx.wait();
       console.log("Transaction confirmed:", receipt);
+      
+      // Check transaction status
+      if (receipt.status !== 1) {
+        throw new Error("Transaction failed");
+      }
       
       // Extract deployed contract address from events
       let deployedAddress = "";
@@ -299,6 +305,12 @@ const ContractTemplatesPage = () => {
             // Continue checking other logs
           }
         }
+      }
+      
+      // Show success even if address extraction failed
+      if (!deployedAddress) {
+        console.warn("Deployed event not found in receipt logs");
+        toast.warning("Transaction confirmed but deployed address not found. Please check the transaction on explorer.");
       }
 
       if (deployedAddress) {
