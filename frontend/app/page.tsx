@@ -77,8 +77,8 @@ const Home = () => {
       router.push(link);
     } else {
       setIsButtonLoading(true);
-      toast.info("Please connect your wallet to continue");
-      setIsButtonLoading(false);
+        toast.info("Please connect your wallet to continue");
+        setIsButtonLoading(false);
     }
   };
 
@@ -107,26 +107,26 @@ const Home = () => {
         <div className="text-center mb-20">
           <h1 className="text-5xl md:text-6xl font-bold mb-4 text-white">
             OnchainLab
-          </h1>
+            </h1>
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
             Developer tools for building and deploying smart contracts on Mantle Sepolia
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => handleNavigateToFeature("/token-factory")}
+              <button
+                onClick={() => handleNavigateToFeature("/token-factory")}
               className={`px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors ${
-                isButtonLoading ? "opacity-75 cursor-wait" : ""
-              }`}
-              disabled={isButtonLoading}
-            >
+                  isButtonLoading ? "opacity-75 cursor-wait" : ""
+                }`}
+                disabled={isButtonLoading}
+              >
               {isButtonLoading ? "Connecting..." : isConnected ? "Get Started" : "Connect Wallet"}
-            </button>
-            <button
-              onClick={() => router.push("/contract-analyzer")}
+              </button>
+              <button
+                onClick={() => router.push("/contract-analyzer")}
               className="px-6 py-3 bg-transparent border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white rounded-lg font-medium transition-colors"
             >
               Explore Tools
-            </button>
+                </button>
           </div>
         </div>
 
@@ -170,8 +170,8 @@ const Home = () => {
                 <div className="text-lg font-semibold text-blue-400 mb-2">1. Connect Wallet</div>
                 <p className="text-gray-400 text-sm">
                   Connect your wallet to Mantle Sepolia testnet to get started.
-                </p>
-              </div>
+            </p>
+          </div>
               <div>
                 <div className="text-lg font-semibold text-blue-400 mb-2">2. Choose a Tool</div>
                 <p className="text-gray-400 text-sm">

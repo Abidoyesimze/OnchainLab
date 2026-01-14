@@ -20,7 +20,7 @@ if (isIpfs) {
   nextConfig.trailingSlash = true;
   nextConfig.images = {
     unoptimized: true,
-  };
+};
 }
 
 export default nextConfig;

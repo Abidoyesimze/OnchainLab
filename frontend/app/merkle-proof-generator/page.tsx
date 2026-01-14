@@ -11,7 +11,8 @@ import type { ParseResult } from "papaparse";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { formatEther } from "viem";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount } from "wagmi";
+import { NETWORK_INFO } from "../../contracts/deployedContracts";
 import {
   CheckCircleIcon,
   ClipboardDocumentIcon,
@@ -34,8 +35,6 @@ interface TreeInfo {
 
 const MerkleGenerator = () => {
   const { address: connectedAddress, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
 
   // UI state
   const [addresses, setAddresses] = useState<string[]>([]);
@@ -567,38 +566,8 @@ const MerkleGenerator = () => {
       <div className="max-w-4xl mx-auto p-6">
         {/* Header Section */}
         <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-white">OnchainLab Merkle Proof Generator</h2>
-
-            {/* Wallet Connection */}
-            <div>
-              {!isConnected ? (
-                <button
-                  onClick={() => {
-                    connect({ connector: connectors[0] });
-                    toast.info("Connecting wallet...");
-                  }}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Connect Wallet
-                </button>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-300">
-                    {connectedAddress?.slice(0, 6)}...{connectedAddress?.slice(-4)}
-                  </span>
-                  <button
-                    onClick={() => {
-                      disconnect();
-                      toast.info("Wallet disconnected");
-                    }}
-                    className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors text-sm"
-                  >
-                    Disconnect
-                  </button>
-                </div>
-              )}
-            </div>
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold text-white">Merkle Proof Generator</h2>
           </div>
 
           <p className="text-gray-300 mb-4">
@@ -606,7 +575,7 @@ const MerkleGenerator = () => {
             your Merkle root and proofs.
           </p>
           <p className="text-xs text-gray-400 mb-4">
-            Supported testnets: ETN (Chain ID: 5201420) and Somnia (Chain ID: 50312)
+            Network: {NETWORK_INFO.name} (Chain ID: {NETWORK_INFO.chainId})
           </p>
 
           <div className="bg-purple-900/20 p-4 rounded-lg border border-purple-800">
@@ -913,12 +882,12 @@ const MerkleGenerator = () => {
                           {txHash && (
                             <p className="mt-1">
                               <a
-                                href={`https://testnet-blockexplorer.electroneum.com/tx/${txHash}`}
+                                href={`${NETWORK_INFO.blockExplorer}/tx/${txHash}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-purple-400 hover:text-purple-300 underline text-sm"
                               >
-                                View on ETN Explorer
+                                View on Explorer
                               </a>
                             </p>
                           )}

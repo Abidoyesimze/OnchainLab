@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ContractTemplatesContract, getContractAddress } from "../../ABI";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
 import ContractVerification from "../../components/ContractVerification";
+import { CONTRACT_ADDRESSES, CONTRACT_ABIS, NETWORK_INFO } from "../../contracts/deployedContracts";
 
 // Define types for better type safety
 interface DeploymentParams {
@@ -134,15 +134,14 @@ const ContractTemplatesPage = () => {
       return;
     }
 
-    // Check if we're on a supported network
+    // Check if we're on Mantle Sepolia
     if (!networkInfo) {
       toast.error("Unable to detect network. Please check your wallet connection.");
       return;
     }
 
-    const supportedNetworks = ["5201420", "50312"]; // ETN and Somnia
-    if (!supportedNetworks.includes(networkInfo.chainId)) {
-      toast.error(`Unsupported network. Please switch to ETN (5201420) or Somnia (50312) testnet. Current: ${networkInfo.chainId}`);
+    if (networkInfo.chainId !== NETWORK_INFO.chainId.toString()) {
+      toast.error(`Please switch to ${NETWORK_INFO.name} (Chain ID: ${NETWORK_INFO.chainId}). Current: ${networkInfo.chainId}`);
       return;
     }
 
@@ -239,9 +238,8 @@ const ContractTemplatesPage = () => {
         return;
       }
 
-      // Get the correct contract address for the current network
-      const networkType = networkInfo.chainId === "5201420" ? "etn" : "somnia";
-      const contractAddress = getContractAddress("ContractTemplates", networkType);
+      // Get the contract address for Mantle Sepolia
+      const contractAddress = CONTRACT_ADDRESSES.ContractTemplates;
       
       console.log("🚀 Deploying contract template...");
       console.log("Network Info:", networkInfo);
@@ -269,7 +267,7 @@ const ContractTemplatesPage = () => {
       
       const contract = new ethers.Contract(
         contractAddress,
-        ContractTemplatesContract.abi,
+        CONTRACT_ABIS.ContractTemplates,
         signer
       );
 
@@ -646,52 +644,6 @@ const ContractTemplatesPage = () => {
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto pr-2 space-y-6 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800" style={{ scrollBehavior: 'smooth' }}>
-          {/* Template Info */}
-            <div className="p-4 bg-[#0f1a2e] rounded-xl border border-[#1e2a3a]">
-            <h3 className="text-lg font-semibold mb-3 text-emerald-400">Template Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-gray-400">Category:</span>
-                <span className="text-white ml-2">{template?.category}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Complexity:</span>
-                <span className="text-white ml-2">{template?.complexity}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Gas Estimate:</span>
-                <span className="text-white ml-2">{template?.gasEstimate}</span>
-              </div>
-            </div>
-          </div>
-
-            {/* Network Information */}
-            {networkInfo && (
-              <div className="p-4 bg-[#0f1a2e] rounded-xl border border-[#1e2a3a]">
-                <h3 className="text-lg font-semibold text-emerald-400 mb-3">Network Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Network:</span>
-                    <span className="text-white">{networkInfo.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Chain ID:</span>
-                    <span className="text-white">{networkInfo.chainId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Contract Address:</span>
-                    <span className="text-emerald-400 font-mono text-xs">
-                      {getContractAddress("ContractTemplates").slice(0, 10)}...{getContractAddress("ContractTemplates").slice(-8)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Status:</span>
-                    <span className="text-green-400">✓ Ready to Deploy</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
           {/* Parameter Inputs */}
             <div>
             <h3 className="text-lg font-semibold mb-4 text-emerald-400">Deployment Parameters</h3>
@@ -740,7 +692,7 @@ const ContractTemplatesPage = () => {
       <div className="max-w-6xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-slate-400 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold mb-4 text-white">
             Contract Templates
           </h1>
           <p className="text-xl text-gray-300">
@@ -754,10 +706,10 @@ const ContractTemplatesPage = () => {
             <div className="text-4xl mb-4">🔒</div>
             <h2 className="text-xl font-bold mb-4">Connect Your Wallet</h2>
             <p className="text-gray-300">
-              Please connect your wallet to any EVM-compatible network to deploy contract templates.
+              Please connect your wallet to {NETWORK_INFO.name} to deploy contract templates.
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Supported testnets: ETN (Chain ID: 5201420) and Somnia (Chain ID: 50312)
+              Network: {NETWORK_INFO.name} (Chain ID: {NETWORK_INFO.chainId})
             </p>
           </div>
         ) : (
@@ -816,33 +768,6 @@ const ContractTemplatesPage = () => {
                   </button>
                 </div>
               ))}
-            </div>
-
-            {/* Contract Information */}
-            <div className="bg-[#1c2941] p-6 rounded-xl border border-[#2a3b54] shadow-xl">
-              <h2 className="text-2xl font-bold mb-4 text-emerald-400">Contract Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-2 text-white">Contract Address</h3>
-                  <div className="flex items-center gap-2">
-                    <code className="text-emerald-400 text-sm bg-[#0f1a2e] p-3 rounded-lg flex-1 break-all border border-[#1e2a3a]">
-                      {ContractTemplatesContract.address}
-                    </code>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(ContractTemplatesContract.address)}
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded transition-all duration-200"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-2 text-white">Network</h3>
-                  <div className="text-emerald-400 font-semibold">EVM-Compatible Network</div>
-                  <div className="text-gray-400 text-sm">Chain ID: {networkInfo?.chainId || "..."}</div>
-                  <div className="text-xs text-gray-500 mt-1">Supported: ETN (5201420), Somnia (50312)</div>
-                </div>
-              </div>
             </div>
 
             {/* Recently Deployed Contracts */}
