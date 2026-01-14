@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { InheritanceTooltip } from "./InheritanceTooltip";
 import { Abi, AbiFunction } from "abitype";
 import { Address, TransactionReceipt } from "viem";
-import { useAccount, useConfig, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { ethers } from "ethers";
+import { useAccount } from "wagmi";
 import {
   ContractInput,
   TxReceipt,
@@ -14,9 +15,8 @@ import {
   transformAbiFunction,
 } from "~~/app/debug/_components/contract";
 import { IntegerInput } from "~~/components/ui";
-import { useTransactor } from "~~/hooks/core";
 import { useTargetNetwork } from "~~/hooks/core/useTargetNetwork";
-import { simulateContractWriteAndNotifyError } from "~~/utils/core/contract";
+import { getParsedError, notification } from "~~/utils/core";
 
 type WriteOnlyFunctionFormProps = {
   abi: Abi;
@@ -24,6 +24,36 @@ type WriteOnlyFunctionFormProps = {
   onChange: () => void;
   contractAddress: Address;
   inheritedFrom?: string;
+};
+
+// Helper function to convert ethers receipt to viem format
+const convertEthersReceiptToViem = (receipt: ethers.ContractTransactionReceipt): TransactionReceipt => {
+  return {
+    blockHash: receipt.blockHash,
+    blockNumber: BigInt(receipt.blockNumber),
+    contractAddress: receipt.contractAddress || null,
+    cumulativeGasUsed: BigInt(receipt.gasUsed),
+    effectiveGasPrice: receipt.gasPrice ? BigInt(receipt.gasPrice.toString()) : BigInt(0),
+    from: receipt.from,
+    gasUsed: BigInt(receipt.gasUsed.toString()),
+    logs: receipt.logs.map(log => ({
+      address: log.address,
+      topics: log.topics as `0x${string}`[],
+      data: log.data as `0x${string}`,
+      blockNumber: BigInt(log.blockNumber),
+      blockHash: log.blockHash as `0x${string}`,
+      transactionHash: log.transactionHash as `0x${string}`,
+      transactionIndex: log.index,
+      logIndex: log.index,
+      removed: log.removed || false,
+    })),
+    logsBloom: receipt.logsBloom as `0x${string}`,
+    status: receipt.status === 1 ? "success" : "reverted",
+    to: receipt.to || null,
+    transactionHash: receipt.hash as `0x${string}`,
+    transactionIndex: receipt.index,
+    type: "legacy",
+  } as TransactionReceipt;
 };
 
 export const WriteOnlyFunctionForm = ({
@@ -35,45 +65,62 @@ export const WriteOnlyFunctionForm = ({
 }: WriteOnlyFunctionFormProps) => {
   const [form, setForm] = useState<Record<string, any>>(() => getInitialFormState(abiFunction));
   const [txValue, setTxValue] = useState<string>("");
-  const { chain } = useAccount();
-  const writeTxn = useTransactor();
+  const { chain, isConnected } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const writeDisabled = !chain || chain?.id !== targetNetwork.id;
+  const [isPending, setIsPending] = useState(false);
+  const [displayedTxResult, setDisplayedTxResult] = useState<TransactionReceipt>();
 
-  const { data: result, isPending, writeContractAsync } = useWriteContract();
-
-  const wagmiConfig = useConfig();
+  const writeDisabled = !isConnected || !chain || chain?.id !== targetNetwork.id;
 
   const handleWrite = async () => {
-    if (writeContractAsync) {
-      try {
-        const writeContractObj = {
-          address: contractAddress,
-          functionName: abiFunction.name,
-          abi: abi,
-          args: getParsedContractFunctionArgs(form),
-          value: BigInt(txValue),
-        };
-        await simulateContractWriteAndNotifyError({ wagmiConfig, writeContractParams: writeContractObj });
+    if (!window.ethereum) {
+      notification.error("MetaMask or wallet provider not found");
+      return;
+    }
 
-        const makeWriteWithParams = () => writeContractAsync(writeContractObj);
-        await writeTxn(makeWriteWithParams);
-        onChange();
-      } catch (e: any) {
-        console.error("⚡️ ~ file: WriteOnlyFunctionForm.tsx:handleWrite ~ error", e);
+    if (!isConnected) {
+      notification.error("Please connect your wallet");
+      return;
+    }
+
+    setIsPending(true);
+    setDisplayedTxResult(undefined);
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(contractAddress, abi as ethers.InterfaceAbi, signer);
+      const args = getParsedContractFunctionArgs(form);
+      const value = txValue ? BigInt(txValue) : BigInt(0);
+
+      // Estimate gas first (optional, for better UX)
+      try {
+        await contract[abiFunction.name].estimateGas(...args, { value });
+      } catch (estimateError: any) {
+        const parsedError = getParsedError(estimateError);
+        notification.error(parsedError);
+        throw estimateError;
       }
+
+      // Execute the transaction
+      const tx = await contract[abiFunction.name](...args, { value });
+      const receipt = await tx.wait();
+
+      // Convert ethers receipt to viem format
+      const viemReceipt = convertEthersReceiptToViem(receipt);
+      setDisplayedTxResult(viemReceipt);
+
+      onChange();
+      notification.success("Transaction successful!");
+    } catch (error: any) {
+      const parsedError = getParsedError(error);
+      notification.error(parsedError);
+      console.error("⚡️ ~ file: WriteOnlyFunctionForm.tsx:handleWrite ~ error", error);
+    } finally {
+      setIsPending(false);
     }
   };
 
-  const [displayedTxResult, setDisplayedTxResult] = useState<TransactionReceipt>();
-  const { data: txResult } = useWaitForTransactionReceipt({
-    hash: result,
-  });
-  useEffect(() => {
-    setDisplayedTxResult(txResult);
-  }, [txResult]);
-
-  // TODO use `useMemo` to optimize also update in ReadOnlyFunctionForm
   const transformedFunction = transformAbiFunction(abiFunction);
   const inputs = transformedFunction.inputs.map((input, inputIndex) => {
     const key = getFunctionInputKey(abiFunction.name, input, inputIndex);
@@ -134,9 +181,9 @@ export const WriteOnlyFunctionForm = ({
           </div>
         </div>
       </div>
-      {zeroInputs && txResult ? (
+      {zeroInputs && displayedTxResult ? (
         <div className="grow basis-0">
-          <TxReceipt txResult={txResult} />
+          <TxReceipt txResult={displayedTxResult} />
         </div>
       ) : null}
     </div>
