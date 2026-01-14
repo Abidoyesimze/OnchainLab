@@ -38,11 +38,7 @@ const TOKEN_ABI = [
 ] as const;
 
 // Helper function to get liquidity URL
-// Note: Currently using Uniswap as default. Update this if Mantle has native DEX tools
 const getLiquidityUrl = (tokenAddress: string, chainId: number): string => {
-  // For Mantle Sepolia Testnet (5003), Uniswap might not be deployed
-  // This is a guidance link - users may need to use mainnet or check if Uniswap is available on testnet
-  // Format: Uniswap V3 add liquidity URL
   return `https://app.uniswap.org/#/add/ETH/${tokenAddress}/${chainId}`;
 };
 
@@ -71,128 +67,147 @@ const TokenFactoryPage = () => {
       try {
         const erc20FactoryAddress = getContractAddress("ERC20Factory");
         const erc20Factory = new ethers.Contract(erc20FactoryAddress, ERC20FactoryABI, provider);
-        const erc20Addresses = await erc20Factory.getTokensByCreator(address);
         
-        for (const tokenAddress of erc20Addresses) {
-          try {
-            const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
-            const [name, symbol] = await Promise.all([
-              tokenContract.name(),
-              tokenContract.symbol(),
-            ]);
-            
-            allTokens.push({
-              id: `${tokenAddress}-erc20`,
-              type: "ERC20",
-              name,
-              symbol,
-              address: tokenAddress,
-              createdAt: Date.now(), // We don't have timestamp from contract, use current time
-            });
-          } catch (err) {
-            console.error(`Error fetching ERC20 token ${tokenAddress}:`, err);
-            // Still add the token with address only
-            allTokens.push({
-              id: `${tokenAddress}-erc20`,
-              type: "ERC20",
-              name: "Unknown",
-              symbol: "UNK",
-              address: tokenAddress,
-              createdAt: Date.now(),
-            });
+        // Check if the function exists before calling
+        try {
+          const erc20Addresses = await erc20Factory.getTokensByCreator(address);
+          
+          for (const tokenAddress of erc20Addresses) {
+            try {
+              const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
+              const [name, symbol] = await Promise.all([
+                tokenContract.name(),
+                tokenContract.symbol(),
+              ]);
+              
+              allTokens.push({
+                id: `${tokenAddress}-erc20`,
+                type: "ERC20",
+                name,
+                symbol,
+                address: tokenAddress,
+                createdAt: Date.now(),
+              });
+            } catch (err) {
+              console.error(`Error fetching ERC20 token ${tokenAddress}:`, err);
+              allTokens.push({
+                id: `${tokenAddress}-erc20`,
+                type: "ERC20",
+                name: "Unknown",
+                symbol: "UNK",
+                address: tokenAddress,
+                createdAt: Date.now(),
+              });
+            }
+          }
+        } catch (err: any) {
+          // If function doesn't exist or returns empty data, silently skip
+          if (err.code !== 'BAD_DATA') {
+            console.error("Error fetching ERC20 tokens:", err);
           }
         }
       } catch (err) {
-        console.error("Error fetching ERC20 tokens:", err);
+        console.error("Error with ERC20 factory:", err);
       }
 
       // Fetch ERC721 tokens
       try {
         const erc721FactoryAddress = getContractAddress("ERC721Factory");
         const erc721Factory = new ethers.Contract(erc721FactoryAddress, ERC721FactoryABI, provider);
-        const erc721Addresses = await erc721Factory.getCollectionsByCreator(address);
         
-        for (const tokenAddress of erc721Addresses) {
-          try {
-            const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
-            const [name, symbol] = await Promise.all([
-              tokenContract.name(),
-              tokenContract.symbol(),
-            ]);
-            
-            allTokens.push({
-              id: `${tokenAddress}-erc721`,
-              type: "ERC721",
-              name,
-              symbol,
-              address: tokenAddress,
-              createdAt: Date.now(),
-            });
-          } catch (err) {
-            console.error(`Error fetching ERC721 token ${tokenAddress}:`, err);
-            allTokens.push({
-              id: `${tokenAddress}-erc721`,
-              type: "ERC721",
-              name: "Unknown",
-              symbol: "UNK",
-              address: tokenAddress,
-              createdAt: Date.now(),
-            });
+        try {
+          const erc721Addresses = await erc721Factory.getCollectionsByCreator(address);
+          
+          for (const tokenAddress of erc721Addresses) {
+            try {
+              const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
+              const [name, symbol] = await Promise.all([
+                tokenContract.name(),
+                tokenContract.symbol(),
+              ]);
+              
+              allTokens.push({
+                id: `${tokenAddress}-erc721`,
+                type: "ERC721",
+                name,
+                symbol,
+                address: tokenAddress,
+                createdAt: Date.now(),
+              });
+            } catch (err) {
+              console.error(`Error fetching ERC721 token ${tokenAddress}:`, err);
+              allTokens.push({
+                id: `${tokenAddress}-erc721`,
+                type: "ERC721",
+                name: "Unknown",
+                symbol: "UNK",
+                address: tokenAddress,
+                createdAt: Date.now(),
+              });
+            }
+          }
+        } catch (err: any) {
+          if (err.code !== 'BAD_DATA') {
+            console.error("Error fetching ERC721 tokens:", err);
           }
         }
       } catch (err) {
-        console.error("Error fetching ERC721 tokens:", err);
+        console.error("Error with ERC721 factory:", err);
       }
 
       // Fetch ERC1155 tokens
       try {
         const erc1155FactoryAddress = getContractAddress("ERC1155Factory");
         const erc1155Factory = new ethers.Contract(erc1155FactoryAddress, ERC1155FactoryABI, provider);
-        const erc1155Addresses = await erc1155Factory.getContractsByCreator(address);
         
-        for (const tokenAddress of erc1155Addresses) {
-          try {
-            // ERC1155 has name() but might not have symbol()
-            const tokenContract = new ethers.Contract(tokenAddress, [
-              "function name() view returns (string)",
-            ], provider);
-            const name = await tokenContract.name();
-            
-            allTokens.push({
-              id: `${tokenAddress}-erc1155`,
-              type: "ERC1155",
-              name,
-              symbol: "MT", // Multi-token
-              address: tokenAddress,
-              createdAt: Date.now(),
-            });
-          } catch (err) {
-            console.error(`Error fetching ERC1155 token ${tokenAddress}:`, err);
-            allTokens.push({
-              id: `${tokenAddress}-erc1155`,
-              type: "ERC1155",
-              name: "Unknown",
-              symbol: "MT",
-              address: tokenAddress,
-              createdAt: Date.now(),
-            });
+        try {
+          const erc1155Addresses = await erc1155Factory.getContractsByCreator(address);
+          
+          for (const tokenAddress of erc1155Addresses) {
+            try {
+              const tokenContract = new ethers.Contract(tokenAddress, [
+                "function name() view returns (string)",
+              ], provider);
+              const name = await tokenContract.name();
+              
+              allTokens.push({
+                id: `${tokenAddress}-erc1155`,
+                type: "ERC1155",
+                name,
+                symbol: "MT",
+                address: tokenAddress,
+                createdAt: Date.now(),
+              });
+            } catch (err) {
+              console.error(`Error fetching ERC1155 token ${tokenAddress}:`, err);
+              allTokens.push({
+                id: `${tokenAddress}-erc1155`,
+                type: "ERC1155",
+                name: "Unknown",
+                symbol: "MT",
+                address: tokenAddress,
+                createdAt: Date.now(),
+              });
+            }
+          }
+        } catch (err: any) {
+          if (err.code !== 'BAD_DATA') {
+            console.error("Error fetching ERC1155 tokens:", err);
           }
         }
       } catch (err) {
-        console.error("Error fetching ERC1155 tokens:", err);
+        console.error("Error with ERC1155 factory:", err);
       }
 
-      // Sort by address (we don't have creation timestamp from contract)
       setMyTokens(allTokens);
     } catch (error) {
       console.error("Error fetching tokens:", error);
-      toast.error("Failed to load tokens from contract");
+      // Don't show error toast if it's just empty data
     } finally {
       setIsLoadingTokens(false);
     }
   }, [isConnected, address]);
 
-  // Load tokens when wallet connects or address changes
   useEffect(() => {
     if (isConnected && address) {
       fetchMyTokens();
@@ -295,7 +310,6 @@ const TokenFactoryPage = () => {
         throw new Error("MetaMask or wallet provider not found. Please install MetaMask.");
       }
 
-      // Check if wallet is connected to the correct network
       const provider = new ethers.BrowserProvider(window.ethereum);
       const network = await provider.getNetwork();
       
@@ -308,6 +322,8 @@ const TokenFactoryPage = () => {
       const signer = await provider.getSigner();
       let deployedAddress: string = "";
       let txHash: string = "";
+
+      toast.info("Please confirm the transaction in your wallet...");
 
       switch (selectedTokenType) {
         case "erc20":
@@ -323,43 +339,44 @@ const TokenFactoryPage = () => {
           );
 
           txHash = erc20Tx.hash;
-          toast.info(`Transaction sent: ${txHash.slice(0, 10)}...`);
+          toast.info(`Transaction sent: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
+          
           const erc20Receipt = await erc20Tx.wait();
+          console.log("✅ ERC20 Receipt:", erc20Receipt);
           
           if (erc20Receipt.status !== 1) {
             throw new Error("Transaction failed");
           }
 
-          const erc20Event = erc20Receipt.logs.find((log: any) => {
+          // Parse logs to find TokenCreated event
+          for (const log of erc20Receipt.logs) {
             try {
-              const parsed = erc20Contract.interface.parseLog(log);
-              return parsed?.name === "TokenCreated";
-            } catch {
-              return false;
+              const parsed = erc20Contract.interface.parseLog({
+                topics: [...log.topics],
+                data: log.data
+              });
+              
+              if (parsed && parsed.name === "TokenCreated") {
+                deployedAddress = parsed.args.tokenAddress || parsed.args[1];
+                console.log("✅ Token deployed at:", deployedAddress);
+                break;
+              }
+            } catch (e) {
+              // Skip logs that can't be parsed
+              continue;
             }
-          });
+          }
 
-          if (erc20Event) {
-            try {
-              const parsed = erc20Contract.interface.parseLog(erc20Event);
-              if (parsed && parsed.args.tokenAddress) {
-                deployedAddress = parsed.args.tokenAddress;
-              }
-            } catch (parseError) {
-              console.error("Error parsing TokenCreated event:", parseError);
-              // Try to extract address from logs manually
-              const eventTopic = ethers.id("TokenCreated(address,address,string,string)");
-              const matchingLog = erc20Receipt.logs.find((log: any) => 
-                log.topics && log.topics[0] === eventTopic
-              );
-              if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
-                deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
-              }
+          if (!deployedAddress) {
+            console.warn("Could not find TokenCreated event, trying manual extraction...");
+            const eventTopic = ethers.id("TokenCreated(address,address,string,string)");
+            const matchingLog = erc20Receipt.logs.find((log: any) => 
+              log.topics && log.topics[0] === eventTopic
+            );
+            if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
+              deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
+              console.log("✅ Extracted address from topics:", deployedAddress);
             }
-          } else {
-            console.warn("TokenCreated event not found in receipt logs");
-            // Transaction succeeded but event not found - still show success
-            toast.warning("Transaction confirmed but event not found. Please check the transaction on explorer.");
           }
           break;
 
@@ -368,7 +385,6 @@ const TokenFactoryPage = () => {
           const erc721Contract = new ethers.Contract(erc721Address, ERC721FactoryABI, signer);
           const maxSupply = formData.maxSupply ? parseInt(formData.maxSupply) : 0;
 
-          toast.info("Sending transaction... Please confirm in your wallet.");
           const erc721Tx = await erc721Contract.createCollection(
             formData.name,
             formData.symbol,
@@ -382,47 +398,38 @@ const TokenFactoryPage = () => {
           txHash = erc721Tx.hash;
           toast.info(`Transaction sent: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
           
-          // Wait for transaction with timeout handling
-          const erc721Receipt = await Promise.race([
-            erc721Tx.wait(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("Transaction confirmation timeout. Please check the transaction on the explorer.")), 120000)
-            )
-          ]) as ethers.ContractTransactionReceipt;
+          const erc721Receipt = await erc721Tx.wait();
+          console.log("✅ ERC721 Receipt:", erc721Receipt);
           
           if (erc721Receipt.status !== 1) {
             throw new Error("Transaction failed");
           }
 
-          const erc721Event = erc721Receipt.logs.find((log: any) => {
+          for (const log of erc721Receipt.logs) {
             try {
-              const parsed = erc721Contract.interface.parseLog(log);
-              return parsed?.name === "CollectionCreated";
-            } catch {
-              return false;
+              const parsed = erc721Contract.interface.parseLog({
+                topics: [...log.topics],
+                data: log.data
+              });
+              
+              if (parsed && parsed.name === "CollectionCreated") {
+                deployedAddress = parsed.args.contractAddress || parsed.args[1];
+                console.log("✅ Collection deployed at:", deployedAddress);
+                break;
+              }
+            } catch (e) {
+              continue;
             }
-          });
+          }
 
-          if (erc721Event) {
-            try {
-              const parsed = erc721Contract.interface.parseLog(erc721Event);
-              if (parsed && parsed.args.contractAddress) {
-                deployedAddress = parsed.args.contractAddress;
-              }
-            } catch (parseError) {
-              console.error("Error parsing CollectionCreated event:", parseError);
-              // Try to extract address from logs manually
-              const eventTopic = ethers.id("CollectionCreated(address,address,string,string)");
-              const matchingLog = erc721Receipt.logs.find((log: any) => 
-                log.topics && log.topics[0] === eventTopic
-              );
-              if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
-                deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
-              }
+          if (!deployedAddress) {
+            const eventTopic = ethers.id("CollectionCreated(address,address,string,string)");
+            const matchingLog = erc721Receipt.logs.find((log: any) => 
+              log.topics && log.topics[0] === eventTopic
+            );
+            if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
+              deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
             }
-          } else {
-            console.warn("CollectionCreated event not found in receipt logs");
-            toast.warning("Transaction confirmed but event not found. Please check the transaction on explorer.");
           }
           break;
 
@@ -430,7 +437,6 @@ const TokenFactoryPage = () => {
           const erc1155Address = getContractAddress("ERC1155Factory");
           const erc1155Contract = new ethers.Contract(erc1155Address, ERC1155FactoryABI, signer);
 
-          toast.info("Sending transaction... Please confirm in your wallet.");
           const erc1155Tx = await erc1155Contract.createMultiToken(
             formData.name,
             formData.uri,
@@ -443,47 +449,38 @@ const TokenFactoryPage = () => {
           txHash = erc1155Tx.hash;
           toast.info(`Transaction sent: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
           
-          // Wait for transaction with timeout handling
-          const erc1155Receipt = await Promise.race([
-            erc1155Tx.wait(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("Transaction confirmation timeout. Please check the transaction on the explorer.")), 120000)
-            )
-          ]) as ethers.ContractTransactionReceipt;
+          const erc1155Receipt = await erc1155Tx.wait();
+          console.log("✅ ERC1155 Receipt:", erc1155Receipt);
           
           if (erc1155Receipt.status !== 1) {
             throw new Error("Transaction failed");
           }
 
-          const erc1155Event = erc1155Receipt.logs.find((log: any) => {
+          for (const log of erc1155Receipt.logs) {
             try {
-              const parsed = erc1155Contract.interface.parseLog(log);
-              return parsed?.name === "MultiTokenCreated";
-            } catch {
-              return false;
+              const parsed = erc1155Contract.interface.parseLog({
+                topics: [...log.topics],
+                data: log.data
+              });
+              
+              if (parsed && parsed.name === "MultiTokenCreated") {
+                deployedAddress = parsed.args.contractAddress || parsed.args[1];
+                console.log("✅ Multi-token deployed at:", deployedAddress);
+                break;
+              }
+            } catch (e) {
+              continue;
             }
-          });
+          }
 
-          if (erc1155Event) {
-            try {
-              const parsed = erc1155Contract.interface.parseLog(erc1155Event);
-              if (parsed && parsed.args.contractAddress) {
-                deployedAddress = parsed.args.contractAddress;
-              }
-            } catch (parseError) {
-              console.error("Error parsing MultiTokenCreated event:", parseError);
-              // Try to extract address from logs manually
-              const eventTopic = ethers.id("MultiTokenCreated(address,address,string)");
-              const matchingLog = erc1155Receipt.logs.find((log: any) => 
-                log.topics && log.topics[0] === eventTopic
-              );
-              if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
-                deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
-              }
+          if (!deployedAddress) {
+            const eventTopic = ethers.id("MultiTokenCreated(address,address,string)");
+            const matchingLog = erc1155Receipt.logs.find((log: any) => 
+              log.topics && log.topics[0] === eventTopic
+            );
+            if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
+              deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
             }
-          } else {
-            console.warn("MultiTokenCreated event not found in receipt logs");
-            toast.warning("Transaction confirmed but event not found. Please check the transaction on explorer.");
           }
           break;
 
@@ -491,7 +488,7 @@ const TokenFactoryPage = () => {
           throw new Error("Invalid token type");
       }
 
-      // Show success message even if address extraction failed
+      // Show success even if we couldn't extract the address
       if (deployedAddress) {
         const result: DeploymentResult = {
           type: selectedTokenType.toUpperCase(),
@@ -526,38 +523,32 @@ const TokenFactoryPage = () => {
         setShowSuccessModal(true);
         toast.success(`${selectedTokenType.toUpperCase()} token deployed successfully!`);
         
-        // Refresh tokens from contract after deployment
         setTimeout(() => {
           fetchMyTokens();
-        }, 2000); // Wait 2 seconds for the transaction to be indexed
+        }, 3000);
         
         resetForm();
       } else {
-        // Transaction succeeded but address not found - still show success with tx hash
-        toast.success(`Transaction confirmed! Hash: ${txHash.slice(0, 10)}...`);
-        toast.info("Please check the transaction on the explorer to find the deployed contract address.");
+        toast.success(`Transaction confirmed! Hash: ${txHash}`);
+        toast.info(`View on explorer: ${EXPLORER_URL}/tx/${txHash}`);
+        
+        setTimeout(() => {
+          fetchMyTokens();
+        }, 3000);
       }
     } catch (error: any) {
-      console.error("Deployment error:", error);
+      console.error("❌ Deployment error:", error);
       let errorMessage = "Failed to deploy token";
 
       const errorMsg = error?.message || error?.toString() || "";
       
       if (errorMsg.includes("user rejected") || errorMsg.includes("User rejected")) {
         errorMessage = "Transaction rejected by user";
-      } else if (errorMsg.includes("insufficient funds") || errorMsg.includes("insufficient balance")) {
+      } else if (errorMsg.includes("insufficient funds")) {
         errorMessage = "Insufficient funds for deployment";
       } else if (errorMsg.includes("execution reverted")) {
         errorMessage = "Contract rejected the deployment";
-      } else if (errorMsg.includes("timeout") || errorMsg.includes("took too long") || errorMsg.includes("TIMEOUT")) {
-        errorMessage = "RPC request timed out. The network may be slow. Please try again in a moment.";
-        toast.warning("Network timeout detected. The Mantle Sepolia RPC may be experiencing issues. Please wait a moment and try again.");
-      } else if (errorMsg.includes("network") || errorMsg.includes("Network")) {
-        errorMessage = "Network error. Please check your connection and try again.";
-      } else if (errorMsg.includes("nonce")) {
-        errorMessage = "Transaction nonce error. Please try again.";
       } else if (errorMsg) {
-        // Show more specific error if available
         errorMessage = `Deployment failed: ${errorMsg.slice(0, 100)}`;
       }
 
@@ -623,7 +614,6 @@ const TokenFactoryPage = () => {
             />
           </div>
 
-          {/* Add Liquidity Guidance (only for ERC20 tokens) */}
           {deploymentResult.type === "ERC20" && (
             <div className="mb-6 bg-blue-900/20 rounded-xl p-4 border border-blue-500/30">
               <div className="flex items-start gap-3">
@@ -635,9 +625,9 @@ const TokenFactoryPage = () => {
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold text-blue-400 mb-1">Add Liquidity</h4>
                   <p className="text-xs text-gray-300 mb-3">
-                    To make your token tradable, consider adding liquidity on Uniswap. This allows others to swap between your token and ETH.
+                    To make your token tradable, consider adding liquidity on Uniswap.
                   </p>
-                  <a
+                  
                     href={getLiquidityUrl(deploymentResult.address, NETWORK_INFO.chainId)}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -652,7 +642,7 @@ const TokenFactoryPage = () => {
           )}
 
           <div className="flex gap-4">
-            <a
+            
               href={`${EXPLORER_URL}/address/${deploymentResult.address}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -728,7 +718,6 @@ const TokenFactoryPage = () => {
           />
         </div>
 
-        {/* Add Liquidity Guidance (only for ERC20 tokens) */}
         {token.type === "ERC20" && (
           <div className="mb-6 bg-blue-900/20 rounded-xl p-4 border border-blue-500/30">
             <div className="flex items-start gap-3">
@@ -740,9 +729,9 @@ const TokenFactoryPage = () => {
               <div className="flex-1">
                 <h4 className="text-sm font-semibold text-blue-400 mb-1">Add Liquidity</h4>
                 <p className="text-xs text-gray-300 mb-3">
-                  To make your token tradable, consider adding liquidity on Uniswap. This allows others to swap between your token and ETH.
+                  To make your token tradable, consider adding liquidity on Uniswap.
                 </p>
-                <a
+                
                   href={getLiquidityUrl(token.address, NETWORK_INFO.chainId)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -757,7 +746,7 @@ const TokenFactoryPage = () => {
         )}
 
         <div className="flex gap-4">
-          <a
+          
             href={`${EXPLORER_URL}/address/${token.address}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -818,18 +807,12 @@ const TokenFactoryPage = () => {
                   {isLoadingTokens ? (
                     <div className="p-6 text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                      <p className="text-gray-400 text-sm">Loading tokens from contract...</p>
+                      <p className="text-gray-400 text-sm">Loading tokens...</p>
                     </div>
                   ) : myTokens.length === 0 ? (
                     <div className="p-6 text-center">
                       <p className="text-gray-400 text-sm">No tokens created yet</p>
                       <p className="text-gray-500 text-xs mt-2">Create your first token to see it here</p>
-                      <button
-                        onClick={fetchMyTokens}
-                        className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-                      >
-                        Refresh
-                      </button>
                     </div>
                   ) : (
                     <div className="divide-y divide-[#2a3b54]">
@@ -1046,7 +1029,7 @@ const TokenFactoryPage = () => {
                       </button>
                     </form>
                   </>
-                ) : selectedToken ? (
+                ) : (
                   <>
                     <div className="flex items-center justify-between mb-6">
                       <h2 className="text-2xl font-bold text-white">Token Details</h2>
@@ -1059,188 +1042,6 @@ const TokenFactoryPage = () => {
                       </button>
                     </div>
                     <TokenDetailsView token={selectedToken} />
-                  </>
-                ) : (
-                  <>
-                    <h2 className="text-2xl font-bold mb-6 text-white">Create New Token</h2>
-                    <form
-                      onSubmit={e => {
-                        e.preventDefault();
-                        deployToken();
-                      }}
-                      className="space-y-6"
-                    >
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-300 mb-3">Token Type</label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {(["erc20", "erc721", "erc1155"] as TokenType[]).map(type => (
-                            <button
-                              key={type}
-                              type="button"
-                              onClick={() => setSelectedTokenType(type)}
-                              className={`p-3 rounded-lg border transition-all duration-200 ${
-                                selectedTokenType === type
-                                  ? "border-blue-500 bg-blue-500/20 text-blue-400"
-                                  : "border-[#2a3b54] hover:border-blue-500 hover:bg-[#1a2332] text-gray-300"
-                              }`}
-                            >
-                              {type.toUpperCase()}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Token Name *</label>
-                          <input
-                            type="text"
-                            value={formData.name}
-                            onChange={e => handleInputChange("name", e.target.value)}
-                            placeholder="My Awesome Token"
-                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Token Symbol *</label>
-                          <input
-                            type="text"
-                            value={formData.symbol}
-                            onChange={e => handleInputChange("symbol", e.target.value)}
-                            placeholder="MAT"
-                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      {selectedTokenType === "erc20" && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Initial Supply *</label>
-                            <input
-                              type="text"
-                              value={formData.initialSupply}
-                              onChange={e => handleInputChange("initialSupply", e.target.value)}
-                              placeholder="1000000"
-                              className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                              required
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Decimals *</label>
-                            <select
-                              value={formData.decimals}
-                              onChange={e => handleInputChange("decimals", parseInt(e.target.value))}
-                              className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
-                            >
-                              <option value={18}>18 (Standard)</option>
-                              <option value={6}>6 (USDC style)</option>
-                              <option value={8}>8 (Bitcoin style)</option>
-                              <option value={0}>0 (Whole numbers)</option>
-                            </select>
-                          </div>
-                        </div>
-                      )}
-
-                      {(selectedTokenType === "erc721" || selectedTokenType === "erc1155") && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            {selectedTokenType === "erc721" ? "Base URI" : "Metadata URI"} *
-                          </label>
-                          <input
-                            type="text"
-                            value={selectedTokenType === "erc721" ? formData.baseURI : formData.uri}
-                            onChange={e => handleInputChange(selectedTokenType === "erc721" ? "baseURI" : "uri", e.target.value)}
-                            placeholder="https://api.example.com/metadata/"
-                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                            required
-                          />
-                        </div>
-                      )}
-
-                      {selectedTokenType === "erc721" && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Maximum Supply</label>
-                          <input
-                            type="text"
-                            value={formData.maxSupply}
-                            onChange={e => handleInputChange("maxSupply", e.target.value)}
-                            placeholder="10000 (0 for unlimited)"
-                            className="w-full px-4 py-3 bg-[#0f1a2e] border border-[#2a3b54] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                          />
-                        </div>
-                      )}
-
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">Configuration Options</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={formData.mintable}
-                              onChange={e => handleInputChange("mintable", e.target.checked)}
-                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
-                            />
-                            <span className="text-sm text-gray-300">Mintable</span>
-                          </label>
-
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={formData.burnable}
-                              onChange={e => handleInputChange("burnable", e.target.checked)}
-                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
-                            />
-                            <span className="text-sm text-gray-300">Burnable</span>
-                          </label>
-
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={formData.pausable}
-                              onChange={e => handleInputChange("pausable", e.target.checked)}
-                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
-                            />
-                            <span className="text-sm text-gray-300">Pausable</span>
-                          </label>
-                        </div>
-
-                        {selectedTokenType === "erc1155" && (
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={formData.supplyTracked}
-                              onChange={e => handleInputChange("supplyTracked", e.target.checked)}
-                              className="w-4 h-4 text-blue-600 bg-[#0f1a2e] border-[#2a3b54] rounded focus:ring-blue-500 focus:ring-2"
-                            />
-                            <span className="text-sm text-gray-300">Track Total Supply</span>
-                          </label>
-                        )}
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={isDeploying}
-                        className={`w-full py-4 px-6 rounded-lg font-medium transition-colors ${
-                          isDeploying
-                            ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                            : "bg-blue-600 hover:bg-blue-700 text-white"
-                        }`}
-                      >
-                        {isDeploying ? (
-                          <div className="flex items-center justify-center gap-3">
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                            Deploying {selectedTokenType.toUpperCase()} Token...
-                          </div>
-                        ) : (
-                          `Deploy ${selectedTokenType.toUpperCase()} Token`
-                        )}
-                      </button>
-                    </form>
                   </>
                 )}
               </div>
