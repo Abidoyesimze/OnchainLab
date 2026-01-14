@@ -5,6 +5,17 @@ import { ContractAnalyzerContract, DeFiUtilsContract, ERC20FactoryContract, getC
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
+import { NETWORK_INFO } from "../../contracts/deployedContracts";
+import {
+  CheckCircleIcon,
+  XCircleIcon,
+  DocumentDuplicateIcon,
+  ExternalLinkIcon,
+  ShieldCheckIcon,
+  CodeBracketIcon,
+  CurrencyDollarIcon,
+  ChartBarIcon,
+} from "@heroicons/react/24/outline";
 
 // Define types for better type safety
 interface AnalysisResult {
@@ -203,8 +214,7 @@ const ContractAnalyzerPage = () => {
     if (!showResultsModal || !formattedResult) return null;
 
     const getExplorerLink = (address: string, txHash: string) => {
-      // Use ETN testnet explorer for better integration
-      const baseExplorerUrl = "https://testnet-blockexplorer.electroneum.com";
+      const baseExplorerUrl = NETWORK_INFO.blockExplorer;
       return {
         contract: `${baseExplorerUrl}/address/${address}`,
         transaction: `${baseExplorerUrl}/tx/${txHash}`,
@@ -430,10 +440,10 @@ const ContractAnalyzerPage = () => {
             <div className="text-4xl mb-4">🔒</div>
             <h2 className="text-xl font-bold mb-4">Connect Your Wallet</h2>
             <p className="text-gray-300">
-              Please connect your wallet to any EVM-compatible network to analyze contracts.
+              Please connect your wallet to {NETWORK_INFO.name} to analyze contracts.
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Supported testnets: ETN (Chain ID: 5201420) and Somnia (Chain ID: 50312)
+              Network: {NETWORK_INFO.name} (Chain ID: {NETWORK_INFO.chainId})
             </p>
           </div>
         ) : (
