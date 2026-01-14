@@ -5,6 +5,7 @@ import type { NextPage } from "next";
 import { useAccount } from "wagmi";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { NETWORK_INFO } from "~~/contracts/deployedContracts";
 
 const Debug: NextPage = () => {
   const { isConnected } = useAccount();
@@ -41,10 +42,10 @@ const Debug: NextPage = () => {
             <div className="text-4xl mb-4">🔒</div>
             <h2 className="text-xl font-bold mb-4">Connect Your Wallet</h2>
             <p className="text-gray-300">
-              Please connect your wallet to any EVM-compatible network to debug contracts.
+              Please connect your wallet to {NETWORK_INFO.name} to debug contracts.
             </p>
             <p className="text-xs text-gray-400 mt-2">
-              Supported testnets: ETN (Chain ID: 5201420) and Somnia (Chain ID: 50312)
+              Network: {NETWORK_INFO.name} (Chain ID: {NETWORK_INFO.chainId})
             </p>
           </div>
         ) : (
