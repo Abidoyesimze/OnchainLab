@@ -12,7 +12,8 @@ import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
   ClipboardDocumentIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  ArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 
@@ -34,7 +35,6 @@ const ContractVerification: React.FC<ContractVerificationProps> = ({
   const [verificationInfo, setVerificationInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
-  const [showChecklist, setShowChecklist] = useState(false);
 
   const network = getNetworkFromChainId(networkChainId);
 
@@ -110,119 +110,33 @@ const ContractVerification: React.FC<ContractVerificationProps> = ({
   const { status, network: networkInfo } = verificationInfo;
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      {/* Verification Status */}
-      <div className={`p-4 rounded-lg border ${
-        status.success 
-          ? 'bg-green-900/20 border-green-500/30' 
-          : 'bg-amber-900/20 border-amber-500/30'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {status.success ? (
-              <CheckCircleIcon className="h-6 w-6 text-green-400" />
-            ) : (
-              <ExclamationTriangleIcon className="h-6 w-6 text-amber-400" />
-            )}
-            <div>
-              <h3 className="font-semibold text-white">
-                {status.success ? 'Contract Verified' : 'Contract Not Verified'}
-              </h3>
-              <p className="text-sm text-gray-300">
-                {status.message}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => copyToClipboard(contractAddress, 'Contract address')}
-              className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              title="Copy contract address"
-            >
-              <ClipboardDocumentIcon className="h-4 w-4 text-gray-300" />
-            </button>
-            {status.explorerUrl && (
+    <div className={`space-y-3 ${className}`}>
+      {/* Verification Info - Simplified and Optional */}
+      <div className="p-4 bg-blue-900/10 rounded-lg border border-blue-500/20">
+        <div className="flex items-start gap-3">
+          <InformationCircleIcon className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h4 className="text-sm font-semibold text-blue-400 mb-1">Verify Your Token (Optional)</h4>
+            <p className="text-xs text-gray-400 mb-3">
+              Verifying your token contract on Mantlescan makes the source code publicly visible, building trust and transparency with your users.
+            </p>
+            {status.verificationUrl && (
               <a
-                href={status.explorerUrl}
+                href={status.verificationUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                title="View on explorer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
+                <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                Verify on Mantlescan
               </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* Contract Information */}
-      <div className="p-4 bg-[#0f1a2e] rounded-lg border border-[#1e2a3a]">
-        <h4 className="font-semibold text-white mb-3">Contract Information</h4>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-400">Address:</span>
-            <code className="text-emerald-400 font-mono text-xs">
-              {contractAddress.slice(0, 10)}...{contractAddress.slice(-8)}
-            </code>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Network:</span>
-            <span className="text-white">{networkInfo.name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Type:</span>
-            <span className="text-white capitalize">{contractType}</span>
-          </div>
-          {contractName && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Name:</span>
-              <span className="text-white">{contractName}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      {!status.success && (
-        <div className="space-y-3">
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowGuide(!showGuide)}
-              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
-            >
-              <DocumentTextIcon className="h-5 w-5" />
-              {showGuide ? 'Hide' : 'Show'} Verification Guide
-            </button>
-            <button
-              onClick={() => setShowChecklist(!showChecklist)}
-              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              <CheckCircleIcon className="h-5 w-5" />
-              {showChecklist ? 'Hide' : 'Show'} Checklist
-            </button>
-          </div>
-
-          {status.verificationUrl && (
-            <a
-              href={status.verificationUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-              Open Verification Page
-            </a>
-          )}
-        </div>
-      )}
-
-      {/* Verification Guide */}
-      {showGuide && verificationInfo.guide && (
+      {/* Collapsible Verification Guide - Only show if user wants it */}
+      {showGuide && (
         <div className="p-4 bg-[#0f1a2e] rounded-lg border border-[#1e2a3a]">
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold text-white">Verification Guide</h4>
@@ -235,44 +149,23 @@ const ContractVerification: React.FC<ContractVerificationProps> = ({
             </button>
           </div>
           <div className="prose prose-invert max-w-none">
-            <pre className="text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto">
+            <pre className="text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-60 overflow-y-auto">
               {verificationInfo.guide}
             </pre>
           </div>
         </div>
       )}
 
-      {/* Verification Checklist */}
-      {showChecklist && verificationInfo.checklist && (
-        <div className="p-4 bg-[#0f1a2e] rounded-lg border border-[#1e2a3a]">
-          <h4 className="font-semibold text-white mb-3">Verification Checklist</h4>
-          <div className="space-y-2">
-            {verificationInfo.checklist.map((item: string, index: number) => (
-              <div key={index} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full border-2 border-gray-600 flex items-center justify-center">
-                  <span className="text-xs text-gray-400">{index + 1}</span>
-                </div>
-                <span className="text-sm text-gray-300">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Show Guide Button - Only if guide is hidden */}
+      {!showGuide && (
+        <button
+          onClick={() => setShowGuide(true)}
+          className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+        >
+          <DocumentTextIcon className="h-4 w-4" />
+          Show Verification Guide
+        </button>
       )}
-
-      {/* Benefits Section */}
-      <div className="p-4 bg-gradient-to-r from-slate-800/50 to-slate-700/50 rounded-lg border border-[#2a3b54]">
-        <h4 className="font-semibold text-amber-400 mb-3">Why Verify Your Contract?</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-300">
-          <div className="space-y-2">
-            <div>✅ <strong>Transparency:</strong> Source code is publicly visible</div>
-            <div>✅ <strong>Trust:</strong> Users can verify functionality</div>
-          </div>
-          <div className="space-y-2">
-            <div>✅ <strong>Integration:</strong> Easier tool integration</div>
-            <div>✅ <strong>Security:</strong> Community can audit code</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
