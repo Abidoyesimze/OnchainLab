@@ -28,5 +28,5 @@ export const useInitializeNativeCurrencyPrice = () => {
   }, [fetchPrice]);
 
   // Get the price of ETH from Uniswap at a given interval
-  useInterval(fetchPrice, enablePolling ? targetNetworks[0].pollingInterval : null);
+  useInterval(fetchPrice, enablePolling ? pollingInterval : null);
 };
