@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { ERC20FactoryABI, ERC721FactoryABI, ERC1155FactoryABI, getContractAddress } from "../../ABI";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
 import { DocumentDuplicateIcon, ArrowTopRightOnSquareIcon, CheckCircleIcon, PlusIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import ContractVerification from "../../components/ContractVerification";
-import { NETWORK_INFO } from "../../contracts/deployedContracts";
+import { NETWORK_INFO, CONTRACT_ADDRESSES, CONTRACT_ABIS } from "../../contracts/deployedContracts";
 
 type TokenType = "erc20" | "erc721" | "erc1155";
 
@@ -65,8 +64,8 @@ const TokenFactoryPage = () => {
 
       // Fetch ERC20 tokens
       try {
-        const erc20FactoryAddress = getContractAddress("ERC20Factory");
-        const erc20Factory = new ethers.Contract(erc20FactoryAddress, ERC20FactoryABI, provider);
+        const erc20FactoryAddress = CONTRACT_ADDRESSES.ERC20Factory;
+        const erc20Factory = new ethers.Contract(erc20FactoryAddress, CONTRACT_ABIS.ERC20Factory, provider);
         
         // Check if the function exists before calling
         try {
@@ -112,8 +111,8 @@ const TokenFactoryPage = () => {
 
       // Fetch ERC721 tokens
       try {
-        const erc721FactoryAddress = getContractAddress("ERC721Factory");
-        const erc721Factory = new ethers.Contract(erc721FactoryAddress, ERC721FactoryABI, provider);
+        const erc721FactoryAddress = CONTRACT_ADDRESSES.ERC721Factory;
+        const erc721Factory = new ethers.Contract(erc721FactoryAddress, CONTRACT_ABIS.ERC721Factory, provider);
         
         try {
           const erc721Addresses = await erc721Factory.getCollectionsByCreator(address);
@@ -157,8 +156,8 @@ const TokenFactoryPage = () => {
 
       // Fetch ERC1155 tokens
       try {
-        const erc1155FactoryAddress = getContractAddress("ERC1155Factory");
-        const erc1155Factory = new ethers.Contract(erc1155FactoryAddress, ERC1155FactoryABI, provider);
+        const erc1155FactoryAddress = CONTRACT_ADDRESSES.ERC1155Factory;
+        const erc1155Factory = new ethers.Contract(erc1155FactoryAddress, CONTRACT_ABIS.ERC1155Factory, provider);
         
         try {
           const erc1155Addresses = await erc1155Factory.getContractsByCreator(address);
@@ -326,11 +325,22 @@ const TokenFactoryPage = () => {
       toast.info("Please confirm the transaction in your wallet...");
 
       switch (selectedTokenType) {
-        case "erc20":
-          const erc20Address = getContractAddress("ERC20Factory");
-          const erc20Contract = new ethers.Contract(erc20Address, ERC20FactoryABI, signer);
+        case "erc20": {
+          const erc20Address = CONTRACT_ADDRESSES.ERC20Factory;
+          
+          // Verify contract exists at address
+          const code = await provider.getCode(erc20Address);
+          if (code === "0x" || !code) {
+            throw new Error(`No contract found at address ${erc20Address} on this network. Please verify the contract is deployed.`);
+          }
+          
+          console.log("✅ Contract verified at address:", erc20Address);
+          
+          const erc20Contract = new ethers.Contract(erc20Address, CONTRACT_ABIS.ERC20Factory, signer);
           const initialSupplyWei = ethers.parseUnits(formData.initialSupply, formData.decimals);
 
+          // Send transaction
+          console.log("🚀 Sending createToken transaction...");
           const erc20Tx = await erc20Contract.createToken(
             formData.name,
             formData.symbol,
@@ -339,52 +349,78 @@ const TokenFactoryPage = () => {
           );
 
           txHash = erc20Tx.hash;
+          console.log("📝 Transaction hash:", txHash);
           toast.info(`Transaction sent: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
           
-          const erc20Receipt = await erc20Tx.wait();
-          console.log("✅ ERC20 Receipt:", erc20Receipt);
+          // Wait for transaction confirmation with timeout
+          console.log("⏳ Waiting for transaction confirmation...");
+          const receipt = await Promise.race([
+            erc20Tx.wait(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Transaction timeout")), 120000))
+          ]) as any;
           
-          if (erc20Receipt.status !== 1) {
+          console.log("✅ Transaction confirmed! Block:", receipt.blockNumber);
+          console.log("📊 Receipt status:", receipt.status);
+          console.log("📊 Receipt logs count:", receipt.logs?.length || 0);
+          
+          if (receipt.status !== 1) {
             throw new Error("Transaction failed");
           }
 
-          // Parse logs to find TokenCreated event
-          for (const log of erc20Receipt.logs) {
-            try {
-              const parsed = erc20Contract.interface.parseLog({
-                topics: [...log.topics],
-                data: log.data
-              });
-              
-              if (parsed && parsed.name === "TokenCreated") {
-                deployedAddress = parsed.args.tokenAddress || parsed.args[1];
-                console.log("✅ Token deployed at:", deployedAddress);
-                break;
+          // Parse TokenCreated event from receipt logs
+          if (receipt.logs && receipt.logs.length > 0) {
+            console.log("🔍 Parsing logs from receipt...");
+            for (const log of receipt.logs) {
+              try {
+                const parsed = erc20Contract.interface.parseLog(log);
+                if (parsed && parsed.name === "TokenCreated") {
+                  deployedAddress = parsed.args.tokenAddress;
+                  console.log("✅ Found token address in receipt:", deployedAddress);
+                  break;
+                }
+              } catch (e) {
+                // Continue checking other logs
               }
-            } catch (e) {
-              // Skip logs that can't be parsed
-              continue;
             }
           }
 
+          // Fallback: Query events from block if not in receipt
           if (!deployedAddress) {
-            console.warn("Could not find TokenCreated event, trying manual extraction...");
-            const eventTopic = ethers.id("TokenCreated(address,address,string,string)");
-            const matchingLog = erc20Receipt.logs.find((log: any) => 
-              log.topics && log.topics[0] === eventTopic
-            );
-            if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
-              deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
-              console.log("✅ Extracted address from topics:", deployedAddress);
+            console.log("🔍 Receipt logs empty, querying events from block...");
+            try {
+              const readContract = new ethers.Contract(erc20Address, CONTRACT_ABIS.ERC20Factory, provider);
+              const filter = readContract.filters.TokenCreated();
+              const events = await readContract.queryFilter(filter, receipt.blockNumber, receipt.blockNumber);
+              
+              console.log("📊 Found", events.length, "events in block");
+              
+              for (const event of events) {
+                if (event.transactionHash === receipt.hash && 'args' in event) {
+                  deployedAddress = event.args.tokenAddress;
+                  console.log("✅ Found token address from event query:", deployedAddress);
+                  break;
+                }
+              }
+            } catch (err) {
+              console.error("❌ Error querying events:", err);
             }
           }
           break;
+        }
 
-        case "erc721":
-          const erc721Address = getContractAddress("ERC721Factory");
-          const erc721Contract = new ethers.Contract(erc721Address, ERC721FactoryABI, signer);
+        case "erc721": {
+          const erc721Address = CONTRACT_ADDRESSES.ERC721Factory;
+          
+          // Verify contract exists
+          const code = await provider.getCode(erc721Address);
+          if (code === "0x" || !code) {
+            throw new Error(`No contract found at address ${erc721Address} on this network.`);
+          }
+          
+          const erc721Contract = new ethers.Contract(erc721Address, CONTRACT_ABIS.ERC721Factory, signer);
           const maxSupply = formData.maxSupply ? parseInt(formData.maxSupply) : 0;
 
+          // Send transaction
           const erc721Tx = await erc721Contract.createCollection(
             formData.name,
             formData.symbol,
@@ -398,45 +434,63 @@ const TokenFactoryPage = () => {
           txHash = erc721Tx.hash;
           toast.info(`Transaction sent: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
           
-          const erc721Receipt = await erc721Tx.wait();
-          console.log("✅ ERC721 Receipt:", erc721Receipt);
+          // Wait for transaction confirmation
+          const receipt = await Promise.race([
+            erc721Tx.wait(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Transaction timeout")), 120000))
+          ]) as any;
           
-          if (erc721Receipt.status !== 1) {
+          if (receipt.status !== 1) {
             throw new Error("Transaction failed");
           }
 
-          for (const log of erc721Receipt.logs) {
-            try {
-              const parsed = erc721Contract.interface.parseLog({
-                topics: [...log.topics],
-                data: log.data
-              });
-              
-              if (parsed && parsed.name === "CollectionCreated") {
-                deployedAddress = parsed.args.contractAddress || parsed.args[1];
-                console.log("✅ Collection deployed at:", deployedAddress);
-                break;
+          // Parse CollectionCreated event from receipt logs
+          if (receipt.logs && receipt.logs.length > 0) {
+            for (const log of receipt.logs) {
+              try {
+                const parsed = erc721Contract.interface.parseLog(log);
+                if (parsed && parsed.name === "CollectionCreated") {
+                  deployedAddress = parsed.args.contractAddress;
+                  break;
+                }
+              } catch (e) {
+                // Continue checking other logs
               }
-            } catch (e) {
-              continue;
             }
           }
 
+          // Fallback: Query events from block if not in receipt
           if (!deployedAddress) {
-            const eventTopic = ethers.id("CollectionCreated(address,address,string,string)");
-            const matchingLog = erc721Receipt.logs.find((log: any) => 
-              log.topics && log.topics[0] === eventTopic
-            );
-            if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
-              deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
+            try {
+              const readContract = new ethers.Contract(erc721Address, CONTRACT_ABIS.ERC721Factory, provider);
+              const filter = readContract.filters.CollectionCreated();
+              const events = await readContract.queryFilter(filter, receipt.blockNumber, receipt.blockNumber);
+              
+              for (const event of events) {
+                if (event.transactionHash === receipt.hash && 'args' in event) {
+                  deployedAddress = event.args.contractAddress;
+                  break;
+                }
+              }
+            } catch (err) {
+              console.error("Error querying events:", err);
             }
           }
           break;
+        }
 
-        case "erc1155":
-          const erc1155Address = getContractAddress("ERC1155Factory");
-          const erc1155Contract = new ethers.Contract(erc1155Address, ERC1155FactoryABI, signer);
+        case "erc1155": {
+          const erc1155Address = CONTRACT_ADDRESSES.ERC1155Factory;
+          
+          // Verify contract exists
+          const code = await provider.getCode(erc1155Address);
+          if (code === "0x" || !code) {
+            throw new Error(`No contract found at address ${erc1155Address} on this network.`);
+          }
+          
+          const erc1155Contract = new ethers.Contract(erc1155Address, CONTRACT_ABIS.ERC1155Factory, signer);
 
+          // Send transaction
           const erc1155Tx = await erc1155Contract.createMultiToken(
             formData.name,
             formData.uri,
@@ -449,46 +503,56 @@ const TokenFactoryPage = () => {
           txHash = erc1155Tx.hash;
           toast.info(`Transaction sent: ${txHash.slice(0, 10)}... Waiting for confirmation...`);
           
-          const erc1155Receipt = await erc1155Tx.wait();
-          console.log("✅ ERC1155 Receipt:", erc1155Receipt);
+          // Wait for transaction confirmation
+          const receipt = await Promise.race([
+            erc1155Tx.wait(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Transaction timeout")), 120000))
+          ]) as any;
           
-          if (erc1155Receipt.status !== 1) {
+          if (receipt.status !== 1) {
             throw new Error("Transaction failed");
           }
 
-          for (const log of erc1155Receipt.logs) {
-            try {
-              const parsed = erc1155Contract.interface.parseLog({
-                topics: [...log.topics],
-                data: log.data
-              });
-              
-              if (parsed && parsed.name === "MultiTokenCreated") {
-                deployedAddress = parsed.args.contractAddress || parsed.args[1];
-                console.log("✅ Multi-token deployed at:", deployedAddress);
-                break;
+          // Parse MultiTokenCreated event from receipt logs
+          if (receipt.logs && receipt.logs.length > 0) {
+            for (const log of receipt.logs) {
+              try {
+                const parsed = erc1155Contract.interface.parseLog(log);
+                if (parsed && parsed.name === "MultiTokenCreated") {
+                  deployedAddress = parsed.args.contractAddress;
+                  break;
+                }
+              } catch (e) {
+                // Continue checking other logs
               }
-            } catch (e) {
-              continue;
             }
           }
 
+          // Fallback: Query events from block if not in receipt
           if (!deployedAddress) {
-            const eventTopic = ethers.id("MultiTokenCreated(address,address,string)");
-            const matchingLog = erc1155Receipt.logs.find((log: any) => 
-              log.topics && log.topics[0] === eventTopic
-            );
-            if (matchingLog && matchingLog.topics && matchingLog.topics.length > 1) {
-              deployedAddress = ethers.getAddress("0x" + matchingLog.topics[1].slice(-40));
+            try {
+              const readContract = new ethers.Contract(erc1155Address, CONTRACT_ABIS.ERC1155Factory, provider);
+              const filter = readContract.filters.MultiTokenCreated();
+              const events = await readContract.queryFilter(filter, receipt.blockNumber, receipt.blockNumber);
+              
+              for (const event of events) {
+                if (event.transactionHash === receipt.hash && 'args' in event) {
+                  deployedAddress = event.args.contractAddress;
+                  break;
+                }
+              }
+            } catch (err) {
+              console.error("Error querying events:", err);
             }
           }
           break;
+        }
 
         default:
           throw new Error("Invalid token type");
       }
 
-      // Show success even if we couldn't extract the address
+      // Show success
       if (deployedAddress) {
         const result: DeploymentResult = {
           type: selectedTokenType.toUpperCase(),
@@ -528,13 +592,19 @@ const TokenFactoryPage = () => {
         }, 3000);
         
         resetForm();
-      } else {
-        toast.success(`Transaction confirmed! Hash: ${txHash}`);
-        toast.info(`View on explorer: ${EXPLORER_URL}/tx/${txHash}`);
+      } else if (txHash) {
+        // Transaction succeeded but couldn't find address
+        console.warn("⚠️ Transaction succeeded but couldn't extract token address");
+        toast.success("Transaction confirmed!");
+        toast.info("Opening transaction in explorer...");
+        
+        window.open(`${EXPLORER_URL}/tx/${txHash}`, '_blank');
         
         setTimeout(() => {
           fetchMyTokens();
         }, 3000);
+        
+        resetForm();
       }
     } catch (error: any) {
       console.error("❌ Deployment error:", error);
@@ -563,8 +633,15 @@ const TokenFactoryPage = () => {
     if (!showSuccessModal || !deploymentResult) return null;
 
     return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-[#1c2941] rounded-xl p-8 max-w-2xl w-full border border-[#2a3b54] shadow-2xl">
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowSuccessModal(false);
+          }
+        }}
+      >
+        <div className="bg-[#1c2941] rounded-xl p-8 max-w-2xl w-full border border-[#2a3b54] shadow-2xl max-h-[90vh] overflow-y-auto my-4">
           <div className="text-center mb-8">
             <div className="text-6xl mb-4">🎉</div>
             <h2 className="text-3xl font-bold text-white mb-2">Token Deployed Successfully!</h2>
@@ -587,7 +664,7 @@ const TokenFactoryPage = () => {
                 <div className="text-white font-medium">{deploymentResult.type}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-400 mb-1">Contract Address</div>
+                <div className="text-sm text-gray-400 mb-1">Token Address</div>
                 <div className="flex items-center gap-2">
                   <code className="text-blue-400 font-mono text-sm break-all">{deploymentResult.address}</code>
                   <button
@@ -688,7 +765,7 @@ const TokenFactoryPage = () => {
           <h3 className="text-lg font-semibold mb-4 text-white">Token Information</h3>
           <div className="space-y-4">
             <div>
-              <div className="text-sm text-gray-400 mb-1">Contract Address</div>
+              <div className="text-sm text-gray-400 mb-1">Token Address</div>
               <div className="flex items-center gap-2">
                 <code className="text-blue-400 font-mono text-sm break-all">{token.address}</code>
                 <button
