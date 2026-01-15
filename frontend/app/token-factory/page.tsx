@@ -628,6 +628,7 @@ const TokenFactoryPage = () => {
                     To make your token tradable, consider adding liquidity on Uniswap.
                   </p>
                   
+                  <a
                     href={getLiquidityUrl(deploymentResult.address, NETWORK_INFO.chainId)}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -642,7 +643,7 @@ const TokenFactoryPage = () => {
           )}
 
           <div className="flex gap-4">
-            
+            <a
               href={`${EXPLORER_URL}/address/${deploymentResult.address}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -732,6 +733,7 @@ const TokenFactoryPage = () => {
                   To make your token tradable, consider adding liquidity on Uniswap.
                 </p>
                 
+                <a
                   href={getLiquidityUrl(token.address, NETWORK_INFO.chainId)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -746,7 +748,7 @@ const TokenFactoryPage = () => {
         )}
 
         <div className="flex gap-4">
-          
+          <a
             href={`${EXPLORER_URL}/address/${token.address}`}
             target="_blank"
             rel="noopener noreferrer"
