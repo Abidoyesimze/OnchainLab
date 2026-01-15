@@ -11,76 +11,44 @@ export interface VerificationResult {
 
 export interface ContractInfo {
   address: string;
-  network: 'etn' | 'somnia';
+  network: 'mantle-sepolia';
   contractType: 'token' | 'template';
   constructorArgs?: any[];
   sourceCode?: string;
 }
 
-// Network configuration for verification
+// Network configuration for verification - Mantle Sepolia only
 const NETWORK_CONFIG = {
-  etn: {
-    chainId: '5201420',
-    name: 'ETN Testnet',
-    explorer: 'https://testnet-blockexplorer.electroneum.com',
-    verificationApi: 'https://testnet-blockexplorer.electroneum.com/api',
-    rpcUrl: 'https://testnet-rpc.electroneum.com'
-  },
-  somnia: {
-    chainId: '50312', 
-    name: 'Somnia Testnet',
-    explorer: 'https://shannon-explorer.somnia.network',
-    verificationApi: 'https://shannon-explorer.somnia.network/api',
-    rpcUrl: 'https://shannon-explorer.somnia.network'
+  'mantle-sepolia': {
+    chainId: '5003',
+    name: 'Mantle Sepolia Testnet',
+    explorer: 'https://sepolia.mantlescan.xyz',
+    verificationApi: 'https://api-sepolia.mantlescan.xyz/api',
+    rpcUrl: 'https://rpc.sepolia.mantle.xyz'
   }
 };
 
-// Get network info from chain ID
-export const getNetworkFromChainId = (chainId: string): 'etn' | 'somnia' | null => {
-  switch (chainId) {
-    case '5201420':
-      return 'etn';
-    case '50312':
-      return 'somnia';
-    default:
-      return null;
+// Get network info from chain ID - only supports Mantle Sepolia
+export const getNetworkFromChainId = (chainId: string): 'mantle-sepolia' | null => {
+  if (chainId === '5003') {
+    return 'mantle-sepolia';
   }
+  return null;
 };
 
 // Check if contract is already verified
 export const checkVerificationStatus = async (contractInfo: ContractInfo): Promise<VerificationResult> => {
-  try {
-    const network = NETWORK_CONFIG[contractInfo.network];
-    
-    // Check verification status via API
-    const response = await fetch(`${network.verificationApi}/contracts/${contractInfo.address}`);
-    
-    if (response.ok) {
-      const data = await response.json();
-      
-      if (data.verified) {
-        return {
-          success: true,
-          message: 'Contract is already verified',
-          explorerUrl: `${network.explorer}/address/${contractInfo.address}`,
-          verificationUrl: `${network.explorer}/address/${contractInfo.address}#code`
-        };
-      }
-    }
-    
-    return {
-      success: false,
-      message: 'Contract is not verified',
-      explorerUrl: `${network.explorer}/address/${contractInfo.address}`,
-      verificationUrl: `${network.explorer}/address/${contractInfo.address}#verifyContract`
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: 'Unable to check verification status',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
-  }
+  const network = NETWORK_CONFIG[contractInfo.network];
+  
+  // For Mantle Sepolia, we'll provide verification links but skip API check
+  // as the API endpoint may not be available or may have CORS issues
+  // The explorer page will show if the contract is verified
+  return {
+    success: false,
+    message: 'Contract verification can be done on Mantlescan',
+    explorerUrl: `${network.explorer}/address/${contractInfo.address}`,
+    verificationUrl: `${network.explorer}/address/${contractInfo.address}#verifyContract`
+  };
 };
 
 // Generate verification guide for different contract types
@@ -98,9 +66,9 @@ export const generateVerificationGuide = (contractInfo: ContractInfo): string =>
   guide += `3. **Select "Via Standard JSON Input"**\n`;
   guide += `4. **Upload the contract source code** (see below for source code)\n`;
   guide += `5. **Enter compiler settings:**\n`;
-  guide += `   - Compiler Version: \`v0.8.19+commit.7dd6d404\`\n`;
+  guide += `   - Compiler Version: \`v0.8.28+commit.7893614a\`\n`;
   guide += `   - Optimization: \`Enabled\` (200 runs)\n`;
-  guide += `   - EVM Version: \`default\`\n`;
+  guide += `   - EVM Version: \`cancun\`\n`;
   guide += `6. **Click "Verify & Publish"**\n\n`;
   
   if (contractInfo.contractType === 'token') {
@@ -145,7 +113,7 @@ const getTokenContractSourceCode = (contractInfo: ContractInfo): string => {
 // This is a simplified version - the actual deployed contract
 // includes additional features like minting, burning, pausing, etc.
 
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -179,7 +147,7 @@ const getTemplateContractSourceCode = (contractInfo: ContractInfo): string => {
 // This is a simplified version - the actual deployed contract
 // includes the full implementation based on the template type
 
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";

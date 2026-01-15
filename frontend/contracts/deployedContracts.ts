@@ -26,15 +26,23 @@ export const CONTRACT_ADDRESSES = {
 } as const;
 
 // Contract ABIs for easy access
+// Extract abi property if it's a full artifact object
+const extractABI = (abiOrArtifact: any) => {
+  if (abiOrArtifact && typeof abiOrArtifact === 'object' && 'abi' in abiOrArtifact) {
+    return abiOrArtifact.abi;
+  }
+  return abiOrArtifact;
+};
+
 export const CONTRACT_ABIS = {
-  ERC20Factory: ERC20FactoryABI,
-  ERC721Factory: ERC721FactoryABI,
-  ERC1155Factory: ERC1155FactoryABI,
-  DeFiUtils: DeFiUtilsABI,
-  ContractAnalyzer: ContractAnalyzerABI,
-  ContractTemplates: ContractTemplatesABI,
-  MerkleProofValidator: MerkleProofValidatorABI,
-  MerkleProof: MerkleProofABI,
+  ERC20Factory: extractABI(ERC20FactoryABI),
+  ERC721Factory: extractABI(ERC721FactoryABI),
+  ERC1155Factory: extractABI(ERC1155FactoryABI),
+  DeFiUtils: extractABI(DeFiUtilsABI),
+  ContractAnalyzer: extractABI(ContractAnalyzerABI),
+  ContractTemplates: extractABI(ContractTemplatesABI),
+  MerkleProofValidator: extractABI(MerkleProofValidatorABI),
+  MerkleProof: extractABI(MerkleProofABI),
 } as const;
 
 // Network information
@@ -42,7 +50,7 @@ export const NETWORK_INFO = {
   name: "Mantle Sepolia Testnet",
   chainId: 5003,
   rpcUrl: "https://rpc.sepolia.mantle.xyz",
-  blockExplorer: "https://explorer.sepolia.mantle.xyz",
+  blockExplorer: "https://sepolia.mantlescan.xyz",
   nativeCurrency: {
     name: "Mantle Sepolia ETH",
     symbol: "ETH",
