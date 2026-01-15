@@ -1,11 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ContractAnalyzerContract, DeFiUtilsContract, ERC20FactoryContract, getContractAddress } from "../../ABI";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
-import { NETWORK_INFO } from "../../contracts/deployedContracts";
+import { NETWORK_INFO, CONTRACT_ADDRESSES, CONTRACT_ABIS } from "../../contracts/deployedContracts";
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -97,7 +96,7 @@ const ContractAnalyzerPage = () => {
       // Use ethers.js directly (same fix as Token Factory)
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(getContractAddress("ContractAnalyzer"), ContractAnalyzerContract.abi, signer);
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.ContractAnalyzer, CONTRACT_ABIS.ContractAnalyzer, signer);
 
       // Estimate gas properly
       const gasEstimate = await contract.analyzeContract.estimateGas(contractAddress);
@@ -182,9 +181,9 @@ const ContractAnalyzerPage = () => {
 
   // Sample contract addresses for quick testing
   const sampleAddresses = [
-    { name: "Token Factory", address: getContractAddress("ERC20Factory") },
-    { name: "DeFi Utils", address: getContractAddress("DeFiUtils") },
-    { name: "Contract Analyzer", address: getContractAddress("ContractAnalyzer") },
+    { name: "Token Factory", address: CONTRACT_ADDRESSES.ERC20Factory },
+    { name: "DeFi Utils", address: CONTRACT_ADDRESSES.DeFiUtils },
+    { name: "Contract Analyzer", address: CONTRACT_ADDRESSES.ContractAnalyzer },
   ];
 
   const handleSampleAddress = (address: string) => {

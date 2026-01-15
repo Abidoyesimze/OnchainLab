@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { MerkleProofValidatorContract, getContractAddress } from "../../ABI";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
-import { NETWORK_INFO } from "../../contracts/deployedContracts";
+import { NETWORK_INFO, CONTRACT_ADDRESSES, CONTRACT_ABIS } from "../../contracts/deployedContracts";
 
 const MerkleValidatorPage = () => {
   const { address, isConnected } = useAccount();
@@ -45,8 +44,8 @@ const MerkleValidatorPage = () => {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(
-        getContractAddress("MerkleProofValidator"),
-        MerkleProofValidatorContract.abi,
+        CONTRACT_ADDRESSES.MerkleProofValidator,
+        CONTRACT_ABIS.MerkleProofValidator,
         signer,
       );
 
@@ -112,8 +111,8 @@ const MerkleValidatorPage = () => {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(
-        getContractAddress("MerkleProofValidator"),
-        MerkleProofValidatorContract.abi,
+        CONTRACT_ADDRESSES.MerkleProofValidator,
+        CONTRACT_ABIS.MerkleProofValidator,
         signer,
       );
 

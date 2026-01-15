@@ -243,7 +243,6 @@ const ContractTemplatesPage = () => {
       
       console.log("🚀 Deploying contract template...");
       console.log("Network Info:", networkInfo);
-      console.log("Network Type:", networkType);
       console.log("Contract Address:", contractAddress);
       console.log("Template:", template);
       console.log("Arguments:", args);
@@ -267,7 +266,7 @@ const ContractTemplatesPage = () => {
       
       const contract = new ethers.Contract(
         contractAddress,
-        CONTRACT_ABIS.ContractTemplates,
+        (CONTRACT_ABIS.ContractTemplates as any).abi || CONTRACT_ABIS.ContractTemplates,
         signer
       );
 

@@ -43,7 +43,7 @@ async function fetchByteCodeAndAssembly(buildInfoDirectory: string, contractPath
 
 const getContractData = async (address: string) => {
   try {
-    const contracts = deployedContracts as GenericContractsDeclaration | null;
+    const contracts = deployedContracts as unknown as GenericContractsDeclaration | null;
     const chainId = hardhat.id;
     let contractPath = "";
 

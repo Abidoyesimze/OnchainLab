@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MerkleProofContract } from "../../ABI";
 import { generateMerkleTree as buildMerkleTree } from "../../utils/Merkle";
 import { MerkleTree } from "../../utils/Merkle";
 import { ethers } from "ethers";
@@ -12,7 +11,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { formatEther } from "viem";
 import { useAccount } from "wagmi";
-import { NETWORK_INFO } from "../../contracts/deployedContracts";
+import { NETWORK_INFO, CONTRACT_ADDRESSES, CONTRACT_ABIS } from "../../contracts/deployedContracts";
 import {
   CheckCircleIcon,
   ClipboardDocumentIcon,
@@ -22,8 +21,8 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 
-// Contract address - use the actual deployed contract address from ABI
-const CONTRACT_ADDRESS = MerkleProofContract.address;
+// Contract address - use the actual deployed contract address from deployedContracts
+const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.MerkleProof;
 
 // Define interface for tree info
 interface TreeInfo {
@@ -68,7 +67,7 @@ const MerkleGenerator = () => {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
-        const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, MerkleProofContract.abi, signer);
+        const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABIS.MerkleProof, signer);
 
         setContract(contractInstance);
         setSigner(signer);

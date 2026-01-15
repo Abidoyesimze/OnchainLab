@@ -16,25 +16,27 @@ export const wagmiConfig = createConfig({
   client({ chain }) {
     // Configure timeout (15 seconds) for RPC requests
     const httpConfig = { timeout: 15000 };
-    let rpcFallbacks = [http(httpConfig)];
+    // Get default RPC URL from chain
+    const defaultRpcUrl = chain.rpcUrls.default.http[0];
+    let rpcFallbacks = [http(defaultRpcUrl, httpConfig)];
 
     const rpcOverrideUrls = rpcOverrides[chain.id];
     if (rpcOverrideUrls && Array.isArray(rpcOverrideUrls)) {
       // Create fallback transports for each RPC endpoint with timeout
       rpcFallbacks = rpcOverrideUrls.map(url => http(url, httpConfig));
       // Add default as final fallback
-      rpcFallbacks.push(http(httpConfig));
+      rpcFallbacks.push(http(defaultRpcUrl, httpConfig));
     } else if (typeof rpcOverrideUrls === 'string') {
       // Backward compatibility: single string URL
-      rpcFallbacks = [http(rpcOverrideUrls, httpConfig), http(httpConfig)];
+      rpcFallbacks = [http(rpcOverrideUrls, httpConfig), http(defaultRpcUrl, httpConfig)];
     } else {
       const alchemyHttpUrl = getAlchemyHttpUrl(chain.id);
       if (alchemyHttpUrl) {
         const isUsingDefaultKey = !alchemyApiKey;
         // If using default API key, we prioritize the default RPC
         rpcFallbacks = isUsingDefaultKey 
-          ? [http(httpConfig), http(alchemyHttpUrl, httpConfig)] 
-          : [http(alchemyHttpUrl, httpConfig), http(httpConfig)];
+          ? [http(defaultRpcUrl, httpConfig), http(alchemyHttpUrl, httpConfig)] 
+          : [http(alchemyHttpUrl, httpConfig), http(defaultRpcUrl, httpConfig)];
       }
     }
 

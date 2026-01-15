@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { ethers } from "ethers";
 import { toast } from "react-toastify";
 import { useAccount } from "wagmi";
-import { ArrowLeftIcon, ClockIcon, HashIcon, CubeIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ClockIcon, HashtagIcon, CubeIcon } from "@heroicons/react/24/outline";
 
 interface BlockData {
   number: number;
@@ -57,9 +57,9 @@ const BlockPage = () => {
           gasUsed: block.gasUsed.toString(),
           miner: block.miner,
           difficulty: block.difficulty.toString(),
-          totalDifficulty: block.totalDifficulty?.toString() || "0",
+          totalDifficulty: (block as any).totalDifficulty?.toString() || "0",
           size: block.length,
-          transactions: block.transactions.map(tx => typeof tx === 'string' ? tx : tx.hash)
+          transactions: block.transactions.map(tx => typeof tx === 'string' ? tx : (tx as any).hash || String(tx))
         });
       } else {
         setError("Block not found");
@@ -159,7 +159,7 @@ const BlockPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <HashIcon className="h-5 w-5 text-blue-400" />
+                <HashtagIcon className="h-5 w-5 text-blue-400" />
                 <div>
                   <div className="text-sm text-gray-400">Block Hash</div>
                   <div className="text-white font-mono text-sm break-all">{blockData.hash}</div>
@@ -167,7 +167,7 @@ const BlockPage = () => {
               </div>
               
               <div className="flex items-center gap-3">
-                <HashIcon className="h-5 w-5 text-blue-400" />
+                <HashtagIcon className="h-5 w-5 text-blue-400" />
                 <div>
                   <div className="text-sm text-gray-400">Parent Hash</div>
                   <div className="text-white font-mono text-sm break-all">{blockData.parentHash}</div>
@@ -193,7 +193,7 @@ const BlockPage = () => {
               </div>
               
               <div className="flex items-center gap-3">
-                <HashIcon className="h-5 w-5 text-orange-400" />
+                <HashtagIcon className="h-5 w-5 text-orange-400" />
                 <div>
                   <div className="text-sm text-gray-400">Miner</div>
                   <div className="text-white font-mono text-sm break-all">{blockData.miner}</div>
